@@ -54,14 +54,14 @@ export const FlipkartPromoBanner: React.FC<FlipkartPromoBannerProps> = ({
         tabIndex={0}
         aria-label={`View combo deal and offer details for ${current.title}`}
       >
-        {/* Background Image with Dark Gradient Overlay for readability */}
+        {/* Background Image with Balanced Overlay for vibrant food visuals & readability */}
         <div className="absolute inset-0">
           <img
             src={current.imageUrl}
             alt={current.title}
-            className="w-full h-full object-cover object-center transition-all duration-700 ease-out brightness-[0.45] group-hover:scale-105"
+            className="w-full h-full object-cover object-center transition-all duration-700 ease-out brightness-[0.82] group-hover:scale-105"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/35 to-transparent" />
         </div>
 
         {/* Banner Content */}
@@ -74,17 +74,17 @@ export const FlipkartPromoBanner: React.FC<FlipkartPromoBannerProps> = ({
               <Sparkles className="w-3 h-3" />
               {current.highlightBadge}
             </span>
-            <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold uppercase px-2.5 py-1 rounded-full bg-amber-400 text-stone-950">
+            <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold uppercase px-2.5 py-1 rounded-full bg-amber-400 text-stone-950 shadow-xs">
               <Tag className="w-3 h-3" />
               {current.discountText}
             </span>
           </div>
 
-          {/* Heading & Subtitle */}
-          <h2 className="text-xl sm:text-3xl md:text-4xl font-serif font-bold tracking-tight text-white mb-2 line-clamp-2 drop-shadow-sm group-hover:text-amber-200 transition-colors">
+          {/* Heading & Subtitle with text shadow for crisp legibility */}
+          <h2 className="text-xl sm:text-3xl md:text-4xl font-serif font-bold tracking-tight text-white mb-2 line-clamp-2 drop-shadow-[0_2px_6px_rgba(0,0,0,0.85)] group-hover:text-amber-200 transition-colors">
             {current.title}
           </h2>
-          <p className="text-xs sm:text-sm md:text-base text-stone-200 line-clamp-2 mb-4 max-w-xl font-normal">
+          <p className="text-xs sm:text-sm md:text-base text-stone-100 line-clamp-2 mb-4 max-w-xl font-medium drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)]">
             {current.subtitle}
           </p>
 
@@ -112,23 +112,6 @@ export const FlipkartPromoBanner: React.FC<FlipkartPromoBannerProps> = ({
         >
           <ChevronRight className="w-5 h-5" />
         </button>
-
-        {/* Dot Pagination Indicators */}
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20">
-          {banners.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={(e) => {
-                e.stopPropagation();
-                setCurrentIndex(idx);
-              }}
-              aria-label={`Go to slide ${idx + 1}`}
-              className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
-                idx === currentIndex ? 'w-7 bg-amber-400' : 'w-2 bg-white/50 hover:bg-white/80'
-              }`}
-            />
-          ))}
-        </div>
       </div>
     </div>
   );

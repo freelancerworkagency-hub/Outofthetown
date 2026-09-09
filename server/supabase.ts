@@ -143,17 +143,38 @@ CREATE TABLE IF NOT EXISTS public.cafe_info (
     announcement TEXT
 );
 
+-- 6. Invoices Table
+CREATE TABLE IF NOT EXISTS public.invoices (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL,
+    invoice_number TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    customer_phone TEXT NOT NULL,
+    subtotal NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    discount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    delivery_fee NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    tax NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    total NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    payment_method TEXT NOT NULL,
+    items JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_order_id ON public.invoices(order_id);
+
 -- Row Level Security (RLS) policies
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reservations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.promo_banners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cafe_info ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 
--- Allow public read access to Menu, Banners, Cafe Info
+-- Allow public read access to Menu, Banners, Cafe Info, Invoices
 CREATE POLICY IF NOT EXISTS "Public read menu items" ON public.menu_items FOR SELECT USING (true);
 CREATE POLICY IF NOT EXISTS "Public read promo banners" ON public.promo_banners FOR SELECT USING (true);
 CREATE POLICY IF NOT EXISTS "Public read cafe info" ON public.cafe_info FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "Public read invoices" ON public.invoices FOR SELECT USING (true);
 
 -- Allow public insert to Orders and Reservations
 CREATE POLICY IF NOT EXISTS "Public create orders" ON public.orders FOR INSERT WITH CHECK (true);
@@ -165,4 +186,5 @@ CREATE POLICY IF NOT EXISTS "Public read reservations" ON public.reservations FO
 CREATE POLICY IF NOT EXISTS "Service role full access orders" ON public.orders USING (true) WITH CHECK (true);
 CREATE POLICY IF NOT EXISTS "Service role full access reservations" ON public.reservations USING (true) WITH CHECK (true);
 CREATE POLICY IF NOT EXISTS "Service role full access menu" ON public.menu_items USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "Service role full access invoices" ON public.invoices USING (true) WITH CHECK (true);
 `;

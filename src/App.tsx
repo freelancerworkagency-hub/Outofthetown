@@ -301,9 +301,9 @@ function CafeHome() {
         )}
       </AnimatePresence>
 
-      {/* Promotional Banner Extending to the Top (Matching Reference Image) */}
+      {/* Promotional Banner Extending to the Top and Fading to White at Bottom */}
       {!selectedOfferBanner && (
-        <div className="relative bg-stone-950">
+        <div className="relative bg-stone-50 dark:bg-stone-950">
           <TopPromotionalHero
             searchQuery={searchQuery}
             onSearchChange={(q) => {
@@ -333,8 +333,8 @@ function CafeHome() {
             }}
           />
 
-          {/* Food Categories shifted downwards by half line */}
-          <div className="relative z-20 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 translate-y-3 sm:translate-y-3.5 -mb-10 sm:-mb-12">
+          {/* Food Categories smoothly positioned on the clean white transition */}
+          <div className="relative z-20 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 -mt-6 sm:-mt-8 mb-2 sm:mb-4">
             <CategoryPills
               categories={categories}
               activeCategory={activeCategory}
@@ -342,17 +342,11 @@ function CafeHome() {
               itemsCountByCategory={itemsCountByCategory}
             />
           </div>
-
-          {/* Minimalistic clean bottom fade: ends at the bottom edge of the banner container */}
-          <div
-            className="pointer-events-none absolute bottom-0 inset-x-0 h-16 sm:h-20 bg-gradient-to-t from-stone-50 via-stone-50/70 to-transparent dark:from-stone-950 dark:via-stone-950/70 dark:to-transparent z-10"
-            aria-hidden="true"
-          />
         </div>
       )}
 
       {/* Main Homepage Container */}
-      <main className={`w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-4 ${selectedOfferBanner ? 'pt-20 sm:pt-24' : 'pt-14 sm:pt-16'}`}>
+      <main className={`w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-4 ${selectedOfferBanner ? 'pt-20 sm:pt-24' : 'pt-2 sm:pt-4'}`}>
         {selectedOfferBanner ? (
           /* Dedicated Pre-Selected Combo & Offer Details Page */
           <OfferComboView

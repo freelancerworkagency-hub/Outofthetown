@@ -12,6 +12,7 @@ import {
   Zap,
   Server,
   Layers,
+  Sparkles,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 
@@ -25,6 +26,7 @@ interface SupabaseStatus {
   url: string | null;
   connected: boolean;
   tablesFound: string[];
+  tablesMissing?: string[];
   error?: string;
 }
 
@@ -81,6 +83,14 @@ export const SupabaseDatabaseTab: React.FC<SupabaseDatabaseTabProps> = ({
     }
   };
 
+  // Derive Supabase project dashboard link if available
+  const projectRef = status?.url ? status.url.replace(/^https?:\/\//, '').split('.')[0] : null;
+  const sqlEditorUrl = projectRef ? `https://supabase.com/dashboard/project/${projectRef}/sql/new` : 'https://supabase.com/dashboard';
+
+  const allExpected = ['orders', 'reservations', 'menu_items', 'promo_banners', 'cafe_info', 'invoices'];
+  const tablesActiveCount = status?.tablesFound ? status.tablesFound.length : 0;
+  const hasPendingTables = tablesActiveCount < allExpected.length;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -96,12 +106,12 @@ export const SupabaseDatabaseTab: React.FC<SupabaseDatabaseTabProps> = ({
                 {status?.connected ? (
                   <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 font-sans font-semibold inline-flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Connected
+                    Connected ({tablesActiveCount}/{allExpected.length} Active)
                   </span>
                 ) : status?.configured ? (
                   <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-sans font-semibold inline-flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    Configured (Tables Pending)
+                    Connected (Tables Pending)
                   </span>
                 ) : (
                   <span className="text-xs px-2.5 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-sans font-semibold inline-flex items-center gap-1">
@@ -110,7 +120,7 @@ export const SupabaseDatabaseTab: React.FC<SupabaseDatabaseTabProps> = ({
                 )}
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                Centralized cloud data persistence for orders, tables, live tracking & cafe catalog.
+                Centralized cloud data persistence for orders, reservations, live tracking, and cafe catalog.
               </p>
             </div>
           </div>
@@ -137,7 +147,43 @@ export const SupabaseDatabaseTab: React.FC<SupabaseDatabaseTabProps> = ({
         </div>
       </div>
 
-      {/* Status Overview Banner */}
+      {/* Setup Guidance Banner if tables are not yet generated in Supabase */}
+      {status?.configured && hasPendingTables && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-950 dark:text-amber-200">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-sm">
+                Supabase Connected • 1-Minute Table Setup
+              </p>
+              <p className="text-amber-800/80 dark:text-amber-300/80 text-[11px] mt-0.5">
+                Your database URL and API keys are verified. To enable cloud synchronization, run the SQL schema script below in your Supabase project's SQL Editor. The local in-memory store remains 100% active and safe in the meantime.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            <button
+              onClick={handleCopySql}
+              className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer flex items-center gap-1"
+            >
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>Copy SQL</span>
+            </button>
+            <a
+              href={sqlEditorUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-xl bg-white dark:bg-stone-900 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 font-bold hover:bg-amber-100 dark:hover:bg-stone-800 flex items-center gap-1 cursor-pointer"
+            >
+              <span>Open SQL Editor</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Status Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Card 1: Connection & URL */}
         <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs space-y-2">
@@ -163,13 +209,13 @@ export const SupabaseDatabaseTab: React.FC<SupabaseDatabaseTabProps> = ({
         <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
-              Detected Tables
+              Active Schema Tables
             </span>
             <Table className="w-4 h-4 text-stone-400" />
           </div>
           <div className="pt-1">
             <div className="flex flex-wrap gap-1.5">
-              {['orders', 'reservations', 'menu_items', 'promo_banners'].map((tbl) => {
+              {allExpected.map((tbl) => {
                 const found = status?.tablesFound?.includes(tbl);
                 return (
                   <span
@@ -187,8 +233,8 @@ export const SupabaseDatabaseTab: React.FC<SupabaseDatabaseTabProps> = ({
             </div>
             <p className="text-[11px] text-stone-400 mt-2">
               {status?.tablesFound && status.tablesFound.length > 0
-                ? `${status.tablesFound.length} relational tables active`
-                : 'Run SQL migration script below in your Supabase SQL Editor'}
+                ? `${status.tablesFound.length} of ${allExpected.length} tables active in database`
+                : 'Run SQL script below in Supabase SQL Editor'}
             </p>
           </div>
         </div>
@@ -208,7 +254,7 @@ export const SupabaseDatabaseTab: React.FC<SupabaseDatabaseTabProps> = ({
             <p className="text-[11px] text-stone-400 mt-1">
               {status?.connected
                 ? 'Writes sync to Supabase with in-memory caching for zero latency.'
-                : 'Seamless zero-downtime fallback keeps customer ordering 100% operational.'}
+                : 'Seamless fallback keeps food orders and reservations 100% operational.'}
             </p>
           </div>
         </div>
@@ -223,27 +269,38 @@ export const SupabaseDatabaseTab: React.FC<SupabaseDatabaseTabProps> = ({
               Supabase SQL DDL Schema Script
             </h3>
             <p className="text-xs text-stone-500 dark:text-stone-400">
-              Copy this script and paste it into your Supabase Dashboard ➔ SQL Editor ➔ Click Run.
+              Creates tables, indices, and Row Level Security policies for Out of the Town Restro & Bakery.
             </p>
           </div>
 
-          <button
-            onClick={handleCopySql}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold shadow-xs cursor-pointer transition-colors"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copied ? 'Copied to Clipboard!' : 'Copy SQL Schema'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCopySql}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-semibold shadow-xs cursor-pointer transition-colors"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copied ? 'Copied to Clipboard!' : 'Copy SQL Schema'}</span>
+            </button>
+            <a
+              href={sqlEditorUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 cursor-pointer transition-colors"
+            >
+              <span>Open SQL Editor</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </div>
 
         {/* Instructions */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
           <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200/70 dark:border-stone-800">
             <span className="font-bold text-stone-900 dark:text-stone-100 block mb-0.5">
-              1. Open Supabase Dashboard
+              1. Open SQL Editor
             </span>
             <p className="text-stone-500 text-[11px]">
-              Go to your project at supabase.com and navigate to the <strong>SQL Editor</strong> tab.
+              Open your Supabase project dashboard and click on <strong>SQL Editor</strong>.
             </p>
           </div>
           <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200/70 dark:border-stone-800">
@@ -251,15 +308,15 @@ export const SupabaseDatabaseTab: React.FC<SupabaseDatabaseTabProps> = ({
               2. Paste & Run Schema
             </span>
             <p className="text-stone-500 text-[11px]">
-              Paste the SQL schema below and click <strong>Run</strong> to generate all tables & RLS rules.
+              Paste the SQL code below and click <strong>Run</strong> to generate all tables & RLS policies.
             </p>
           </div>
           <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200/70 dark:border-stone-800">
             <span className="font-bold text-stone-900 dark:text-stone-100 block mb-0.5">
-              3. Set Environment Secrets
+              3. Click Refresh Status
             </span>
             <p className="text-stone-500 text-[11px]">
-              Add <strong>SUPABASE_URL</strong> and <strong>SUPABASE_ANON_KEY</strong> in App Settings.
+              Click <strong>Refresh Status</strong> or <strong>Sync To Supabase</strong> to verify full cloud persistence.
             </p>
           </div>
         </div>

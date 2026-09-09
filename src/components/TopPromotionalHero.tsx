@@ -200,7 +200,7 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
 
   return (
     <div
-      className="relative w-full overflow-hidden select-none bg-stone-950"
+      className="relative w-full overflow-hidden select-none bg-stone-50 dark:bg-stone-950"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
       onTouchStart={handleTouchStart}
@@ -209,11 +209,11 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
     >
       {/* 
         ========================================================================
-        FULL-BLEED PROMOTIONAL BANNER CAROUSEL EXTENDING TO THE TOP
-        The background of the entire hero is the active promotional banner/slide
+        FULL-BLEED PROMOTIONAL BANNER CAROUSEL EXTENDING TO THE BOTTOM
+        The background image extends to the bottom and slowly fades with white background
         ========================================================================
       */}
-      <div className="relative w-full min-h-[315px] xs:min-h-[330px] sm:min-h-[350px] md:min-h-[370px] flex flex-col justify-between overflow-hidden">
+      <div className="relative w-full min-h-[350px] xs:min-h-[370px] sm:min-h-[395px] md:min-h-[430px] flex flex-col justify-between overflow-hidden">
         {/* Sliding Track for promotional banners and deals */}
         <div
           className="absolute inset-0 flex w-full h-full transition-transform duration-500 ease-out z-0"
@@ -221,23 +221,27 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
             transform: `translateX(-${currentSlide * 100}%)`,
           }}
         >
-          {/* HIGHWAY PROMOTIONAL COMBOS & DEALS EXTENDING FULL BLEED TO THE TOP */}
+          {/* HIGHWAY PROMOTIONAL COMBOS & DEALS EXTENDING FULL BLEED TO THE TOP AND BOTTOM */}
           {banners.map((combo) => (
             <div
               key={combo.id}
               id={`hero-combo-${combo.id}`}
               onClick={() => onSelectBanner(combo)}
-              className="w-full h-full shrink-0 relative cursor-pointer overflow-hidden flex flex-col justify-start pb-6 sm:pb-8 px-4 sm:px-10 md:px-16 bg-stone-950 group"
-              style={{ paddingTop: `${headerHeight + 32}px` }}
+              className="w-full h-full shrink-0 relative cursor-pointer overflow-hidden flex flex-col justify-start pb-6 sm:pb-8 px-4 sm:px-10 md:px-16 bg-stone-50 dark:bg-stone-950 group"
+              style={{ paddingTop: `${headerHeight + 28}px` }}
             >
-              {/* Full-bleed food promotional banner image */}
+              {/* Full-bleed food promotional banner image extending fully to bottom */}
               <img
                 src={combo.imageUrl}
                 alt={combo.title}
-                className="absolute inset-0 w-full h-full object-cover object-center brightness-[0.42] group-hover:scale-105 transition-transform duration-700"
+                className="absolute inset-0 w-full h-full object-cover object-center brightness-[0.82] group-hover:scale-105 transition-transform duration-700"
               />
-              {/* Deep multi-stop gradient scrim: ensures 100% crisp, readable text across any device and image */}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/55 to-black/80 pointer-events-none" />
+
+              {/* Top scrim: keeps header, logo, search bar & combo title text high-contrast and readable */}
+              <div className="absolute inset-x-0 top-0 h-44 sm:h-56 bg-gradient-to-b from-black/75 via-black/40 to-transparent pointer-events-none" />
+
+              {/* Bottom slow fade: starts 1 line lower, extending smoothly to the bottom white background */}
+              <div className="absolute inset-x-0 bottom-0 h-36 sm:h-46 bg-gradient-to-b from-transparent via-stone-50/20 via-40% via-stone-50/60 via-68% via-stone-50/92 via-88% to-stone-50 dark:via-stone-950/20 dark:via-stone-950/60 dark:via-stone-950/92 dark:to-stone-950 pointer-events-none" />
 
               {/* Lower combo details */}
               <div className="relative z-20 max-w-2xl text-white">
@@ -439,25 +443,6 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
             </button>
           </>
         )}
-
-        {/* Unified Pagination Dots (Floating frosted capsule cleanly positioned under the banner slide) */}
-        <div className="relative z-20 flex items-center justify-center pb-2.5 sm:pb-3 pointer-events-auto">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/45 dark:bg-black/60 backdrop-blur-xs border border-white/20 shadow-xs">
-            {Array.from({ length: totalSlides }).map((_, idx) => (
-              <button
-                key={idx}
-                id={`promo-slide-dot-${idx}`}
-                onClick={() => setCurrentSlide(idx)}
-                aria-label={`Go to promotional slide ${idx + 1}`}
-                className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 cursor-pointer ${
-                  idx === currentSlide
-                    ? 'w-6 sm:w-8 bg-amber-400 shadow-sm'
-                    : 'w-1.5 sm:w-2 bg-white/50 hover:bg-white/80'
-                }`}
-              />
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* TOAST: When user taps on Welcome coupon */}

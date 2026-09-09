@@ -15,15 +15,23 @@ import {
   UtensilsCrossed,
   Eye,
   Filter,
-  ArrowRight,
-  TrendingUp,
   CreditCard,
   Bike,
-  Sparkles,
   ChevronDown,
+  ChevronUp,
   RefreshCw,
+  FileText,
+  Trash2,
+  Ban,
+  Download,
+  Calendar,
+  User,
+  Hash,
+  Database,
 } from 'lucide-react';
-import type { Order, OrderStatus, OrderType } from '../../types.js';
+import type { Order, OrderStatus, OrderType, CafeInfo } from '../../types.js';
+import { api } from '../../services/api.js';
+import { generateOrderInvoicePdf } from '../../utils/invoicePdf.js';
 
 interface OrdersManagementProps {
   orders: Order[];
@@ -40,6 +48,7 @@ interface OrdersManagementProps {
   ) => Promise<void>;
   onRefresh: () => void;
   isLoading?: boolean;
+  cafeInfo?: CafeInfo | null;
 }
 
 const PRESET_STAFF_MEMBERS = [
@@ -54,15 +63,20 @@ const PRESET_PREP_TIMES = [15, 20, 25, 35, 45];
 
 export const OrdersManagement: React.FC<OrdersManagementProps> = ({
   orders,
+  token,
   onUpdateOrderStatus,
   onRefresh,
   isLoading = false,
+  cafeInfo,
 }) => {
-  // Filters & Search
+  // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+
+  // Expand / Collapse State (Default: all orders collapsed)
+  const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(new Set());
 
   // Staff Acceptance Modal State
   const [acceptingOrder, setAcceptingOrder] = useState<Order | null>(null);
@@ -72,14 +86,51 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
   const [kitchenNotes, setKitchenNotes] = useState<string>('');
   const [isSubmittingAcceptance, setIsSubmittingAcceptance] = useState<boolean>(false);
 
+  // Cancel Order Modal State
+  const [cancellingOrder, setCancellingOrder] = useState<Order | null>(null);
+  const [cancelReason, setCancelReason] = useState<string>('Customer requested cancellation / Out of stock');
+  const [isSubmittingCancel, setIsSubmittingCancel] = useState<boolean>(false);
+
+  // Delete Order History Modal State
+  const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
+  const [isSubmittingDelete, setIsSubmittingDelete] = useState<boolean>(false);
+
+  // Invoice Download State
+  const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
+
   // Order Details / KOT Modal State
   const [inspectingOrder, setInspectingOrder] = useState<Order | null>(null);
   const [isKotMode, setIsKotMode] = useState<boolean>(false);
 
-  // Status Change Confirmation / Reason Modal
-  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
-  const [customStatusNotes, setCustomStatusNotes] = useState<string>('');
-  const [targetStatus, setTargetStatus] = useState<OrderStatus | null>(null);
+  // Notification Toast
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Toggle single order expand / collapse
+  const toggleExpandOrder = (orderId: string) => {
+    setExpandedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
+  // Expand All / Collapse All
+  const handleExpandAll = () => {
+    setExpandedOrderIds(new Set(filteredOrders.map((o) => o.id)));
+  };
+
+  const handleCollapseAll = () => {
+    setExpandedOrderIds(new Set());
+  };
 
   // Calculated Summary Metrics
   const metrics = useMemo(() => {
@@ -89,6 +140,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
     const preparingCount = orders.filter((o) => o.status === 'preparing').length;
     const readyCount = orders.filter((o) => o.status === 'ready').length;
     const deliveredCount = orders.filter((o) => o.status === 'delivered').length;
+    const cancelledCount = orders.filter((o) => o.status === 'cancelled').length;
     const totalRevenue = orders
       .filter((o) => o.status !== 'cancelled')
       .reduce((sum, o) => sum + o.total, 0);
@@ -99,11 +151,12 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
       inKitchenCount: acceptedCount + preparingCount,
       readyCount,
       deliveredCount,
+      cancelledCount,
       totalRevenue,
     };
   }, [orders]);
 
-  // Filtered Orders List
+  // Filtered Orders List (with intelligent Order Number matching)
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       // Status filter
@@ -120,10 +173,12 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
         return false;
       }
 
-      // Search query
+      // Search query (Prioritizes Order Number, then Customer Name, Phone, Items)
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchesId = order.id.toLowerCase().includes(q);
+        const q = searchQuery.toLowerCase().trim().replace(/^#/, '');
+        const orderIdClean = order.id.toLowerCase().replace(/^#/, '');
+
+        const matchesId = orderIdClean.includes(q);
         const matchesCustomer = order.customerName.toLowerCase().includes(q);
         const matchesPhone = order.customerPhone.toLowerCase().includes(q);
         const matchesTable = order.tableNumber?.toLowerCase().includes(q);
@@ -145,7 +200,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
     setSelectedStaff(PRESET_STAFF_MEMBERS[0]);
     setCustomStaffName('');
     setPrepTimeMinutes(order.estimatedTimeMinutes || (order.orderType === 'delivery' ? 30 : 20));
-    setKitchenNotes(`Order accepted by staff. Kitchen preparation initiated.`);
+    setKitchenNotes('Order accepted by staff. Kitchen preparation initiated.');
   };
 
   // Submit staff acceptance
@@ -162,15 +217,73 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
         estimatedTimeMinutes: prepTimeMinutes,
         notes: kitchenNotes.trim() || `Accepted by ${staffName}`,
       });
+      showToast(`Order #${acceptingOrder.id} accepted by ${staffName}`);
       setAcceptingOrder(null);
+    } catch (err: any) {
+      showToast('Error accepting order: ' + err.message);
     } finally {
       setIsSubmittingAcceptance(false);
     }
   };
 
+  // Submit Cancel Order
+  const handleConfirmCancel = async () => {
+    if (!cancellingOrder) return;
+    try {
+      setIsSubmittingCancel(true);
+      await api.cancelOrder(token, cancellingOrder.id, cancelReason);
+      await onRefresh();
+      showToast(`Order #${cancellingOrder.id} was successfully cancelled`);
+      setCancellingOrder(null);
+    } catch (err: any) {
+      showToast('Failed to cancel order: ' + err.message);
+    } finally {
+      setIsSubmittingCancel(false);
+    }
+  };
+
+  // Submit Delete / Remove Order History
+  const handleConfirmDelete = async () => {
+    if (!deletingOrder) return;
+    try {
+      setIsSubmittingDelete(true);
+      await api.deleteOrder(token, deletingOrder.id);
+      await onRefresh();
+      showToast(`Order #${deletingOrder.id} permanently removed from history & database`);
+      setDeletingOrder(null);
+    } catch (err: any) {
+      showToast('Failed to delete order record: ' + err.message);
+    } finally {
+      setIsSubmittingDelete(false);
+    }
+  };
+
+  // Download Invoice PDF & Store in Supabase
+  const handleDownloadInvoice = async (order: Order) => {
+    try {
+      setDownloadingInvoiceId(order.id);
+      // 1. Register invoice into Supabase database
+      await api.registerInvoice(token, order.id).catch((err) => {
+        console.warn('Supabase invoice registration notice:', err);
+      });
+      // 2. Generate and download PDF
+      generateOrderInvoicePdf(order, cafeInfo || undefined);
+      showToast(`Bill/Invoice for Order #${order.id} downloaded & stored in Supabase!`);
+    } catch (err: any) {
+      showToast('Error generating invoice: ' + err.message);
+    } finally {
+      setDownloadingInvoiceId(null);
+    }
+  };
+
   // Quick status transition
   const handleQuickStatusChange = async (orderId: string, status: OrderStatus, defaultNotes?: string) => {
-    await onUpdateOrderStatus(orderId, status, { notes: defaultNotes });
+    try {
+      await onUpdateOrderStatus(orderId, status, { notes: defaultNotes });
+      showToast(`Order #${orderId} marked as ${status}`);
+    } catch (err: any) {
+      showToast('Status update failed: ' + err.message);
+    }
   };
 
   // Print KOT
@@ -180,19 +293,27 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Floating Notification Toast */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-in fade-in slide-in-from-bottom-4 border border-stone-700 dark:border-stone-300">
+          <Database className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Top Banner & Refresh */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl sm:text-2xl font-serif font-bold text-stone-900 dark:text-stone-100">
-              Orders Management & Staff Acceptance
+              Orders Management
             </h2>
             <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
-              Live Storage ({orders.length})
+              Supabase Backed ({orders.length})
             </span>
           </div>
           <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1">
-            All customer orders are stored here. Staff can accept incoming requests, assign kitchen chefs, and track orders from preparation to fulfillment.
+            Search orders by order number, expand to view full breakdown, cancel orders, download PDF bills stored in Supabase, and delete order history records.
           </p>
         </div>
 
@@ -204,7 +325,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-xs font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 shadow-xs cursor-pointer transition-all"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>Refresh Queue</span>
+            <span>Refresh</span>
           </button>
 
           <div className="flex items-center rounded-xl bg-stone-200 dark:bg-stone-800 p-1 border border-stone-300 dark:border-stone-700">
@@ -216,7 +337,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                   : 'text-stone-600 dark:text-stone-400'
               }`}
             >
-              Cards
+              Compact Cards
             </button>
             <button
               onClick={() => setViewMode('table')}
@@ -226,7 +347,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                   : 'text-stone-600 dark:text-stone-400'
               }`}
             >
-              Table
+              List View
             </button>
           </div>
         </div>
@@ -237,13 +358,13 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
         {/* Total Orders */}
         <div className="p-3.5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs">
           <div className="flex items-center justify-between text-stone-400 mb-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Total Stored</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider">Total</span>
             <ShoppingBag className="w-4 h-4 text-stone-400" />
           </div>
           <p className="text-2xl font-bold font-mono text-stone-900 dark:text-stone-100">
             {metrics.totalCount}
           </p>
-          <span className="text-[10px] text-stone-500">All-time stored</span>
+          <span className="text-[10px] text-stone-500">Recorded orders</span>
         </div>
 
         {/* Needs Acceptance (Pending) */}
@@ -256,7 +377,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
           }`}
         >
           <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Awaiting Staff</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Pending</span>
             <AlertCircle className={`w-4 h-4 ${metrics.pendingCount > 0 ? 'animate-bounce' : ''}`} />
           </div>
           <div className="flex items-baseline gap-1.5">
@@ -264,13 +385,13 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
               {metrics.pendingCount}
             </p>
             {metrics.pendingCount > 0 && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500 text-white animate-pulse">
-                Action Req
+              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-500 text-white animate-pulse">
+                New
               </span>
             )}
           </div>
           <span className="text-[10px] text-amber-700/80 dark:text-amber-300/80 font-medium">
-            Pending acceptance
+            Awaiting acceptance
           </span>
         </div>
 
@@ -280,103 +401,135 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
           className="p-3.5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs cursor-pointer hover:border-blue-400 transition-all"
         >
           <div className="flex items-center justify-between text-blue-600 dark:text-blue-400 mb-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">In Kitchen</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider">Kitchen</span>
             <ChefHat className="w-4 h-4 text-blue-500" />
           </div>
-          <p className="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400">
+          <p className="text-2xl font-bold font-mono text-stone-900 dark:text-stone-100">
             {metrics.inKitchenCount}
           </p>
-          <span className="text-[10px] text-stone-500">Accepted & Cooking</span>
+          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">
+            Cooking / Preparing
+          </span>
         </div>
 
-        {/* Ready for Pickup / Server */}
+        {/* Ready for Pickup / Delivery */}
         <div
           onClick={() => setStatusFilter(statusFilter === 'ready' ? 'all' : 'ready')}
           className="p-3.5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs cursor-pointer hover:border-purple-400 transition-all"
         >
           <div className="flex items-center justify-between text-purple-600 dark:text-purple-400 mb-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Ready / Plated</span>
-            <CheckCircle2 className="w-4 h-4 text-purple-500" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider">Ready</span>
+            <Bike className="w-4 h-4 text-purple-500" />
           </div>
-          <p className="text-2xl font-bold font-mono text-purple-600 dark:text-purple-400">
+          <p className="text-2xl font-bold font-mono text-stone-900 dark:text-stone-100">
             {metrics.readyCount}
           </p>
-          <span className="text-[10px] text-stone-500">Awaiting dispatch</span>
+          <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">
+            Packed & Ready
+          </span>
         </div>
 
-        {/* Completed / Delivered */}
+        {/* Completed */}
         <div
           onClick={() => setStatusFilter(statusFilter === 'delivered' ? 'all' : 'delivered')}
           className="p-3.5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs cursor-pointer hover:border-emerald-400 transition-all"
         >
           <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 mb-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Completed</span>
-            <Check className="w-4 h-4 text-emerald-500" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider">Fulfilled</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
-          <p className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+          <p className="text-2xl font-bold font-mono text-stone-900 dark:text-stone-100">
             {metrics.deliveredCount}
           </p>
-          <span className="text-[10px] text-stone-500">Fulfilled orders</span>
+          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+            Delivered / Served
+          </span>
         </div>
 
         {/* Total Sales Volume */}
-        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 dark:from-amber-950/30 dark:to-amber-900/10 border border-amber-500/30 shadow-xs">
+        <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 shadow-xs">
           <div className="flex items-center justify-between text-amber-700 dark:text-amber-300 mb-1">
             <span className="text-[11px] font-semibold uppercase tracking-wider">Revenue</span>
-            <TrendingUp className="w-4 h-4 text-amber-600" />
+            <CreditCard className="w-4 h-4 text-amber-600" />
           </div>
           <p className="text-2xl font-bold font-mono text-amber-600 dark:text-amber-400 truncate">
             ₹{metrics.totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </p>
-          <span className="text-[10px] text-amber-800/80 dark:text-amber-300/80 font-medium">
+          <span className="text-[10px] text-stone-500 font-medium">
             Active orders total
           </span>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
-          <input
-            id="input-orders-search"
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by Order ID, customer name, phone, table number..."
-            className="w-full pl-9 pr-8 py-2 rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 text-xs sm:text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-          />
-          {searchQuery && (
+      {/* Prominent Search and Filter Bar with Order Number Focus */}
+      <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs space-y-3">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          {/* Dedicated Order Number & Customer Search Bar */}
+          <div className="relative flex-1">
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-stone-400 pointer-events-none">
+              <Search className="w-4 h-4" />
+              <Hash className="w-3.5 h-3.5 text-amber-600" />
+            </div>
+            <input
+              id="input-orders-search"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by Order Number (e.g. 1001 or #ORD-1001), Customer Name, or Phone..."
+              className="w-full pl-14 pr-8 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 text-xs sm:text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer p-1"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Quick Expand All / Collapse All Controls */}
+          <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+              onClick={handleExpandAll}
+              className="px-3 py-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-semibold cursor-pointer flex items-center gap-1"
+              title="Expand all order details"
             >
-              <X className="w-3.5 h-3.5" />
+              <ChevronDown className="w-3.5 h-3.5" />
+              <span>Expand All</span>
             </button>
-          )}
+            <button
+              onClick={handleCollapseAll}
+              className="px-3 py-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-semibold cursor-pointer flex items-center gap-1"
+              title="Collapse all to order number & name only"
+            >
+              <ChevronUp className="w-3.5 h-3.5" />
+              <span>Collapse All</span>
+            </button>
+          </div>
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
-          <div className="flex items-center gap-1 shrink-0">
+        {/* Status Filter Chips & Type Selector */}
+        <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-stone-100 dark:border-stone-800">
+          <div className="flex items-center gap-1 overflow-x-auto pb-1">
             <span className="text-xs text-stone-400 flex items-center gap-1 mr-1">
               <Filter className="w-3.5 h-3.5" />
               <span>Status:</span>
             </span>
             {[
-              { id: 'all', label: 'All' },
+              { id: 'all', label: 'All Orders' },
               { id: 'pending', label: 'Pending', count: metrics.pendingCount },
               { id: 'accepted', label: 'Accepted' },
               { id: 'preparing', label: 'Preparing' },
               { id: 'ready', label: 'Ready' },
               { id: 'delivered', label: 'Completed' },
-              { id: 'cancelled', label: 'Cancelled' },
+              { id: 'cancelled', label: 'Cancelled', count: metrics.cancelledCount },
             ].map((st) => (
               <button
                 key={st.id}
                 onClick={() => setStatusFilter(st.id)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
                   statusFilter === st.id
                     ? 'bg-amber-600 text-white shadow-xs'
                     : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700'
@@ -392,20 +545,32 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
             ))}
           </div>
 
-          <div className="h-5 w-px bg-stone-200 dark:bg-stone-700 mx-1 hidden sm:block shrink-0" />
-
-          {/* Type Filter */}
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs font-semibold text-stone-700 dark:text-stone-300 focus:outline-hidden cursor-pointer"
-          >
-            <option value="all">All Types</option>
-            <option value="delivery">Delivery</option>
-            <option value="dine-in">Dine-In</option>
-            <option value="pickup">Takeaway / Pickup</option>
-          </select>
+          <div className="flex items-center gap-2">
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="px-3 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs font-semibold text-stone-700 dark:text-stone-300 focus:outline-hidden cursor-pointer"
+            >
+              <option value="all">All Types</option>
+              <option value="delivery">Delivery</option>
+              <option value="dine-in">Dine-In</option>
+              <option value="pickup">Takeaway / Pickup</option>
+            </select>
+          </div>
         </div>
+      </div>
+
+      {/* Notice Banner explaining Default Collapsed Mode */}
+      <div className="flex items-center justify-between text-xs px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-amber-900 dark:text-amber-300">
+        <div className="flex items-center gap-2">
+          <ChevronDown className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>
+            <strong>Compact Overview Active:</strong> Showing Order Number, Date & Time, and Customer Name by default. Click any order row to expand its dishes, download PDF invoice, cancel, or delete.
+          </span>
+        </div>
+        <span className="text-[11px] font-mono text-amber-700 dark:text-amber-400 shrink-0 ml-2">
+          {filteredOrders.length} order{filteredOrders.length === 1 ? '' : 's'} matching
+        </span>
       </div>
 
       {/* Main Orders Display: Cards View or Table View */}
@@ -417,8 +582,8 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
           <h3 className="text-base font-bold text-stone-800 dark:text-stone-200">No Orders Found</h3>
           <p className="text-xs text-stone-500 max-w-sm mx-auto">
             {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
-              ? 'No orders match your current search and filter criteria. Try clearing filters.'
-              : 'No orders have been recorded in the system yet. Once customers order, they will appear here.'}
+              ? 'No orders match your search criteria. Check your order number or clear filters.'
+              : 'No orders have been recorded in the database yet. When customers order online, they will appear here.'}
           </p>
           {(searchQuery || statusFilter !== 'all' || typeFilter !== 'all') && (
             <button
@@ -434,9 +599,12 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
           )}
         </div>
       ) : viewMode === 'cards' ? (
-        /* Cards View */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        /* ============================================================== */
+        /* COMPACT / EXPANDABLE CARDS VIEW */
+        /* ============================================================== */
+        <div className="space-y-3">
           {filteredOrders.map((ord) => {
+            const isExpanded = expandedOrderIds.has(ord.id);
             const isPending = ord.status === 'pending';
             const isAccepted = ord.status === 'accepted';
             const isPreparing = ord.status === 'preparing';
@@ -448,30 +616,65 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
               <div
                 key={ord.id}
                 id={`admin-order-card-${ord.id}`}
-                className={`rounded-2xl bg-white dark:bg-stone-900 border transition-all p-5 shadow-xs flex flex-col justify-between space-y-4 ${
+                className={`rounded-2xl bg-white dark:bg-stone-900 border transition-all shadow-xs overflow-hidden ${
                   isPending
-                    ? 'border-amber-400 dark:border-amber-500/60 ring-2 ring-amber-500/15'
+                    ? 'border-amber-400 dark:border-amber-500/60 ring-2 ring-amber-500/10'
+                    : isCancelled
+                    ? 'border-rose-200 dark:border-rose-900/50 opacity-90'
                     : 'border-stone-200 dark:border-stone-800'
                 }`}
               >
-                <div>
-                  {/* Top Status & Timestamp Header */}
-                  <div className="flex items-start justify-between gap-2 pb-3 border-b border-stone-100 dark:border-stone-800">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-sm text-stone-900 dark:text-stone-100">
-                          {ord.id}
-                        </span>
-                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
-                          {ord.orderType}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-stone-400 font-mono mt-0.5">
-                        {new Date(ord.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })},{' '}
-                        {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                {/* ============================================================== */}
+                {/* COLLAPSED HEADER: Shows ONLY Order Number, Date & Time, Customer Name */}
+                {/* ============================================================== */}
+                <div
+                  onClick={() => toggleExpandOrder(ord.id)}
+                  className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-stone-50/70 dark:hover:bg-stone-800/40 transition-colors select-none ${
+                    isExpanded ? 'bg-stone-50/50 dark:bg-stone-850/50 border-b border-stone-200 dark:border-stone-800' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Order Number Badge */}
+                    <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/60 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+                      <Hash className="w-5 h-5" />
                     </div>
 
+                    <div className="min-w-0">
+                      {/* Order Number & Customer Name */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-bold text-base text-stone-900 dark:text-stone-100">
+                          #{ord.id}
+                        </span>
+                        <span className="text-stone-300 dark:text-stone-700">•</span>
+                        <div className="flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-stone-400" />
+                          <span className="font-bold text-sm text-stone-900 dark:text-stone-100 truncate">
+                            {ord.customerName}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Date and Time */}
+                      <div className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400 mt-0.5 font-mono">
+                        <Calendar className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                        <span>
+                          {new Date(ord.createdAt).toLocaleDateString([], {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                          ,{' '}
+                          {new Date(ord.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right side: Status Pill & Expand Trigger */}
+                  <div className="flex items-center gap-3 self-end sm:self-center">
                     {/* Status Pill */}
                     <span
                       className={`text-[11px] uppercase font-bold px-2.5 py-1 rounded-full shrink-0 flex items-center gap-1 ${
@@ -493,331 +696,440 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                       {isPreparing && <ChefHat className="w-3 h-3" />}
                       {isReady && <Bike className="w-3 h-3" />}
                       {isDelivered && <CheckCircle2 className="w-3 h-3" />}
-                      <span>{isPending ? 'Needs Acceptance' : ord.status}</span>
+                      {isCancelled && <Ban className="w-3 h-3" />}
+                      <span>{isPending ? 'Pending Acceptance' : ord.status}</span>
                     </span>
-                  </div>
 
-                  {/* Staff Acceptance Highlight Banner */}
-                  {ord.acceptedBy ? (
-                    <div className="mt-3 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                          <UserCheck className="w-3.5 h-3.5" />
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-bold text-emerald-900 dark:text-emerald-300">
-                            Accepted by {ord.acceptedBy}
-                          </p>
-                          {ord.acceptedAt && (
-                            <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 font-mono">
-                              at {new Date(ord.acceptedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </p>
+                    {/* Expand/Collapse Button */}
+                    <div className="flex items-center gap-1 text-xs font-semibold text-stone-500 hover:text-amber-600 transition-colors">
+                      <span className="hidden sm:inline">{isExpanded ? 'Collapse' : 'Details'}</span>
+                      {isExpanded ? (
+                        <ChevronUp className="w-4 h-4 text-stone-400" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-stone-400" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ============================================================== */}
+                {/* EXPANDED SECTION: ALL OTHER DETAILS ONLY SHOW UP WHEN EXPANDED */}
+                {/* ============================================================== */}
+                {isExpanded && (
+                  <div className="p-5 space-y-4 bg-stone-50/30 dark:bg-stone-900/30 animate-in fade-in duration-200">
+                    {/* Top Secondary Info: Type, Phone, Address/Table */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-800 text-xs">
+                      <div>
+                        <span className="text-stone-400 block text-[10px] uppercase font-bold tracking-wider">
+                          Order Type & Channel
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="uppercase font-bold text-[11px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200">
+                            {ord.orderType}
+                          </span>
+                          {ord.orderType === 'dine-in' && ord.tableNumber && (
+                            <span className="font-bold text-amber-600 dark:text-amber-400">
+                              Table: {ord.tableNumber}
+                            </span>
                           )}
                         </div>
                       </div>
-                      {ord.estimatedTimeMinutes && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 font-mono">
-                          {ord.estimatedTimeMinutes} min prep
+
+                      <div>
+                        <span className="text-stone-400 block text-[10px] uppercase font-bold tracking-wider">
+                          Customer Contact
                         </span>
-                      )}
-                    </div>
-                  ) : isPending ? (
-                    <div className="mt-3 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                        <p className="text-[11px] font-semibold text-amber-900 dark:text-amber-300">
-                          Awaiting staff kitchen acceptance
-                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <Phone className="w-3.5 h-3.5 text-stone-400" />
+                          <a
+                            href={`tel:${ord.customerPhone}`}
+                            className="font-bold text-amber-600 dark:text-amber-400 hover:underline"
+                          >
+                            {ord.customerPhone}
+                          </a>
+                        </div>
                       </div>
-                      <button
-                        id={`btn-accept-order-${ord.id}`}
-                        onClick={() => handleOpenAcceptModal(ord)}
-                        className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold shadow-xs cursor-pointer flex items-center gap-1"
-                      >
-                        <ChefHat className="w-3 h-3" />
-                        <span>Accept Now</span>
-                      </button>
-                    </div>
-                  ) : null}
 
-                  {/* Customer Information */}
-                  <div className="py-3 text-xs space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <p className="font-bold text-stone-900 dark:text-stone-100 text-sm">
-                        {ord.customerName}
-                      </p>
-                      <a
-                        href={`tel:${ord.customerPhone}`}
-                        className="inline-flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 font-semibold hover:underline"
-                      >
-                        <Phone className="w-3 h-3" />
-                        <span>{ord.customerPhone}</span>
-                      </a>
-                    </div>
-
-                    {ord.orderType === 'dine-in' && ord.tableNumber && (
-                      <p className="text-[11px] font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-1">
-                        <UtensilsCrossed className="w-3.5 h-3.5 text-stone-400" />
-                        <span>Table: <strong className="text-amber-600 dark:text-amber-400">{ord.tableNumber}</strong></span>
-                      </p>
-                    )}
-
-                    {ord.orderType === 'delivery' && ord.deliveryAddress && (
-                      <p className="text-[11px] text-stone-500 dark:text-stone-400 flex items-start gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
-                        <span className="line-clamp-2">{ord.deliveryAddress}</span>
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Ordered Items Preview */}
-                  <div className="bg-stone-50 dark:bg-stone-850 p-3 rounded-xl border border-stone-200 dark:border-stone-800 space-y-2 text-xs">
-                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                      {ord.items.map((it, i) => (
-                        <div key={i} className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-xs">
-                              {it.quantity}x
-                            </span>
-                            <span className="font-medium text-stone-800 dark:text-stone-200 truncate text-[11px]">
-                              {it.name}
-                            </span>
-                          </div>
-                          <span className="font-mono text-stone-600 dark:text-stone-400 text-[11px] shrink-0">
-                            ₹{(it.price * it.quantity).toFixed(0)}
+                      <div>
+                        <span className="text-stone-400 block text-[10px] uppercase font-bold tracking-wider">
+                          Payment Mode & Status
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <CreditCard className="w-3.5 h-3.5 text-stone-400" />
+                          <span className="font-bold uppercase text-stone-800 dark:text-stone-200">
+                            {ord.paymentMethod}
+                          </span>
+                          <span className="text-stone-300">•</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 capitalize font-bold">
+                            {ord.paymentStatus}
                           </span>
                         </div>
-                      ))}
-                    </div>
-
-                    {/* Total & Payment Method */}
-                    <div className="pt-2 border-t border-stone-200 dark:border-stone-700 flex items-center justify-between font-bold text-xs">
-                      <div className="flex items-center gap-1 text-[11px] text-stone-500">
-                        <CreditCard className="w-3 h-3" />
-                        <span className="uppercase">{ord.paymentMethod}</span>
-                        <span>•</span>
-                        <span className="text-emerald-600 dark:text-emerald-400 capitalize">{ord.paymentStatus}</span>
                       </div>
-                      <span className="text-amber-600 dark:text-amber-400 font-mono text-sm">
-                        ₹{ord.total.toFixed(2)}
-                      </span>
+
+                      {ord.deliveryAddress && (
+                        <div className="sm:col-span-3 pt-2 border-t border-stone-100 dark:border-stone-800 flex items-start gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
+                          <span className="text-stone-600 dark:text-stone-300">
+                            <strong>Delivery Address:</strong> {ord.deliveryAddress}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Staff Acceptance Highlight Banner */}
+                    {ord.acceptedBy ? (
+                      <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                            <UserCheck className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-emerald-900 dark:text-emerald-300">
+                              Accepted by {ord.acceptedBy}
+                            </p>
+                            {ord.acceptedAt && (
+                              <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 font-mono">
+                                at {new Date(ord.acceptedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {ord.estimatedTimeMinutes && (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 font-mono">
+                            {ord.estimatedTimeMinutes} min prep
+                          </span>
+                        )}
+                      </div>
+                    ) : isPending ? (
+                      <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <p className="text-xs font-semibold text-amber-900 dark:text-amber-300">
+                            Pending kitchen staff review and acceptance
+                          </p>
+                        </div>
+                        <button
+                          id={`btn-accept-order-${ord.id}`}
+                          onClick={() => handleOpenAcceptModal(ord)}
+                          className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1"
+                        >
+                          <ChefHat className="w-3.5 h-3.5" />
+                          <span>Accept Order</span>
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {/* Ordered Items Breakdown */}
+                    <div className="bg-white dark:bg-stone-850 p-4 rounded-xl border border-stone-200 dark:border-stone-800 space-y-3">
+                      <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-2">
+                        <span className="text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
+                          Ordered Items ({ord.items.length})
+                        </span>
+                        <span className="text-xs text-stone-400 font-mono">Item Total Breakdown</span>
+                      </div>
+
+                      <div className="divide-y divide-stone-100 dark:divide-stone-800 text-xs">
+                        {ord.items.map((it, i) => (
+                          <div key={i} className="py-2 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-xs bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded-md">
+                                {it.quantity}x
+                              </span>
+                              <span className="font-medium text-stone-800 dark:text-stone-200 truncate">
+                                {it.name}
+                              </span>
+                              <span
+                                className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold ${
+                                  it.isVeg
+                                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                                    : 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                }`}
+                              >
+                                {it.isVeg ? 'Veg' : 'Non-Veg'}
+                              </span>
+                            </div>
+                            <span className="font-mono text-stone-700 dark:text-stone-300 font-bold shrink-0">
+                              ₹{(it.price * it.quantity).toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Pricing Totals */}
+                      <div className="pt-3 border-t border-stone-200 dark:border-stone-700 text-xs space-y-1">
+                        <div className="flex justify-between text-stone-500">
+                          <span>Subtotal:</span>
+                          <span className="font-mono">₹{ord.subtotal.toFixed(2)}</span>
+                        </div>
+                        {ord.discount > 0 && (
+                          <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
+                            <span>Promo Discount {ord.promoCode ? `(${ord.promoCode})` : ''}:</span>
+                            <span className="font-mono">-₹{ord.discount.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {ord.deliveryFee > 0 && (
+                          <div className="flex justify-between text-stone-500">
+                            <span>Highway Delivery:</span>
+                            <span className="font-mono">₹{ord.deliveryFee.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-stone-500">
+                          <span>Taxes & GST (5%):</span>
+                          <span className="font-mono">₹{ord.tax.toFixed(2)}</span>
+                        </div>
+                        <div className="pt-2 border-t border-stone-200 dark:border-stone-700 flex justify-between items-center font-bold text-sm">
+                          <span className="text-stone-900 dark:text-stone-100">Grand Total:</span>
+                          <span className="text-amber-600 dark:text-amber-400 font-mono text-base">
+                            ₹{ord.total.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status Notes if any */}
+                    {ord.statusNotes && (
+                      <p className="text-xs text-stone-500 dark:text-stone-400 italic bg-white dark:bg-stone-850 p-2.5 rounded-xl border border-stone-200 dark:border-stone-800">
+                        <strong>Kitchen Note:</strong> "{ord.statusNotes}"
+                      </p>
+                    )}
+
+                    {/* ============================================================== */}
+                    {/* EXPANDED ACTION BUTTONS: Invoice Download, Cancel, Remove, Status */}
+                    {/* ============================================================== */}
+                    <div className="pt-2 flex items-center justify-between gap-2 flex-wrap border-t border-stone-200 dark:border-stone-800">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Download Invoice (PDF) Button - Backed by Supabase */}
+                        <button
+                          id={`btn-download-invoice-${ord.id}`}
+                          onClick={() => handleDownloadInvoice(ord)}
+                          disabled={downloadingInvoiceId === ord.id}
+                          className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5 transition-all"
+                          title="Generate official Tax Invoice PDF and store record in Supabase database"
+                        >
+                          {downloadingInvoiceId === ord.id ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Download className="w-3.5 h-3.5" />
+                          )}
+                          <span>Download Bill (PDF)</span>
+                        </button>
+
+                        {/* Details / KOT Modal Button */}
+                        <button
+                          onClick={() => {
+                            setInspectingOrder(ord);
+                            setIsKotMode(false);
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-semibold border border-stone-200 dark:border-stone-700 cursor-pointer flex items-center gap-1"
+                          title="View Kitchen Ticket (KOT)"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>KOT / Ticket</span>
+                        </button>
+
+                        {/* Advance to Preparing */}
+                        {(isPending || isAccepted) && (
+                          <button
+                            onClick={() =>
+                              handleQuickStatusChange(ord.id, 'preparing', 'Chef started cooking in the kitchen')
+                            }
+                            className="px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 text-xs font-semibold border border-blue-200 dark:border-blue-900 cursor-pointer flex items-center gap-1"
+                          >
+                            <ChefHat className="w-3.5 h-3.5" />
+                            <span>Start Cooking</span>
+                          </button>
+                        )}
+
+                        {/* Advance to Ready */}
+                        {(isAccepted || isPreparing) && (
+                          <button
+                            onClick={() =>
+                              handleQuickStatusChange(ord.id, 'ready', 'Packed & ready for customer/delivery')
+                            }
+                            className="px-2.5 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 hover:bg-purple-100 text-xs font-semibold border border-purple-200 dark:border-purple-900 cursor-pointer flex items-center gap-1"
+                          >
+                            <Bike className="w-3.5 h-3.5" />
+                            <span>Mark Ready</span>
+                          </button>
+                        )}
+
+                        {/* Advance to Delivered / Completed */}
+                        {(isPreparing || isReady) && (
+                          <button
+                            onClick={() =>
+                              handleQuickStatusChange(ord.id, 'delivered', 'Order served / delivered successfully')
+                            }
+                            className="px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 text-xs font-semibold border border-emerald-200 dark:border-emerald-900 cursor-pointer flex items-center gap-1"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Mark Delivered</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {/* Cancel Order Functionality - Can cancel any order */}
+                        {!isCancelled && (
+                          <button
+                            id={`btn-cancel-order-${ord.id}`}
+                            onClick={() => setCancellingOrder(ord)}
+                            className="px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900 text-xs font-semibold border border-rose-200 dark:border-rose-900 cursor-pointer flex items-center gap-1 transition-all"
+                            title="Cancel this order"
+                          >
+                            <Ban className="w-3.5 h-3.5" />
+                            <span>Cancel Order</span>
+                          </button>
+                        )}
+
+                        {/* Remove / Delete Order History Button */}
+                        <button
+                          id={`btn-delete-order-${ord.id}`}
+                          onClick={() => setDeletingOrder(ord)}
+                          className="px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-rose-50 dark:hover:bg-rose-950 hover:text-rose-600 dark:hover:text-rose-400 text-stone-600 dark:text-stone-400 text-xs font-semibold border border-stone-200 dark:border-stone-700 hover:border-rose-300 cursor-pointer flex items-center gap-1 transition-all"
+                          title="Permanently remove this order from history and Supabase database"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove History</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
-
-                  {/* Status Note if available */}
-                  {ord.statusNotes && (
-                    <p className="text-[11px] text-stone-500 dark:text-stone-400 italic mt-2">
-                      Note: "{ord.statusNotes}"
-                    </p>
-                  )}
-                </div>
-
-                {/* Bottom Action Controls for Staff */}
-                <div className="pt-2 border-t border-stone-100 dark:border-stone-800 flex flex-col gap-2">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {/* Accept button for pending */}
-                    {isPending && (
-                      <button
-                        onClick={() => handleOpenAcceptModal(ord)}
-                        className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
-                      >
-                        <UserCheck className="w-3.5 h-3.5" />
-                        <span>Accept Order (Staff)</span>
-                      </button>
-                    )}
-
-                    {/* Advance to Preparing */}
-                    {(isPending || isAccepted) && (
-                      <button
-                        onClick={() =>
-                          handleQuickStatusChange(ord.id, 'preparing', 'Chef started cooking in the kitchen')
-                        }
-                        className="px-2.5 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 text-[11px] font-semibold border border-blue-200 dark:border-blue-900 cursor-pointer flex items-center gap-1"
-                      >
-                        <ChefHat className="w-3 h-3" />
-                        <span>Start Cooking</span>
-                      </button>
-                    )}
-
-                    {/* Advance to Ready */}
-                    {(isAccepted || isPreparing) && (
-                      <button
-                        onClick={() =>
-                          handleQuickStatusChange(ord.id, 'ready', 'Packed & ready for customer/delivery')
-                        }
-                        className="px-2.5 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 hover:bg-purple-100 text-[11px] font-semibold border border-purple-200 dark:border-purple-900 cursor-pointer flex items-center gap-1"
-                      >
-                        <Bike className="w-3 h-3" />
-                        <span>Mark Ready</span>
-                      </button>
-                    )}
-
-                    {/* Advance to Delivered / Completed */}
-                    {(isPreparing || isReady) && (
-                      <button
-                        onClick={() =>
-                          handleQuickStatusChange(ord.id, 'delivered', 'Order served / delivered successfully')
-                        }
-                        className="px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 text-[11px] font-semibold border border-emerald-200 dark:border-emerald-900 cursor-pointer flex items-center gap-1"
-                      >
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>Completed</span>
-                      </button>
-                    )}
-
-                    {/* Cancel button */}
-                    {!isDelivered && !isCancelled && (
-                      <button
-                        onClick={() => {
-                          if (confirm(`Cancel order ${ord.id}?`)) {
-                            handleQuickStatusChange(ord.id, 'cancelled', 'Cancelled by cafe staff');
-                          }
-                        }}
-                        className="px-2 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 hover:bg-rose-100 text-[11px] font-semibold border border-rose-200 dark:border-rose-900 cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                    )}
-
-                    {/* View Details / KOT */}
-                    <button
-                      onClick={() => {
-                        setInspectingOrder(ord);
-                        setIsKotMode(false);
-                      }}
-                      className="px-2.5 py-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700 text-[11px] font-semibold border border-stone-200 dark:border-stone-700 cursor-pointer flex items-center gap-1 ml-auto"
-                      title="Inspect full order breakdown & Kitchen Ticket"
-                    >
-                      <Eye className="w-3 h-3" />
-                      <span>Details / KOT</span>
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
             );
           })}
         </div>
       ) : (
-        /* Table View */
+        /* ============================================================== */
+        /* TABLE / LIST VIEW */
+        /* ============================================================== */
         <div className="overflow-hidden rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-stone-50 dark:bg-stone-850 text-stone-500 dark:text-stone-400 uppercase tracking-wider font-semibold border-b border-stone-200 dark:border-stone-800">
                 <tr>
-                  <th className="p-4">Order ID & Time</th>
-                  <th className="p-4">Customer</th>
-                  <th className="p-4">Type & Location</th>
-                  <th className="p-4">Items</th>
-                  <th className="p-4">Total & Payment</th>
-                  <th className="p-4">Staff In-Charge</th>
+                  <th className="p-4">Order Number</th>
+                  <th className="p-4">Date & Time</th>
+                  <th className="p-4">Customer Name</th>
                   <th className="p-4">Status</th>
                   <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-200 dark:divide-stone-800">
-                {filteredOrders.map((ord) => (
-                  <tr
-                    key={ord.id}
-                    className="hover:bg-stone-50/70 dark:hover:bg-stone-800/40 transition-colors"
-                  >
-                    <td className="p-4 font-mono">
-                      <span className="font-bold text-stone-900 dark:text-stone-100 block">
-                        {ord.id}
-                      </span>
-                      <span className="text-[11px] text-stone-400">
-                        {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <p className="font-bold text-stone-900 dark:text-stone-100">{ord.customerName}</p>
-                      <a
-                        href={`tel:${ord.customerPhone}`}
-                        className="text-[11px] text-amber-600 dark:text-amber-400 hover:underline"
-                      >
-                        {ord.customerPhone}
-                      </a>
-                    </td>
-                    <td className="p-4">
-                      <span className="uppercase font-bold text-[10px] px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 inline-block mb-0.5">
-                        {ord.orderType}
-                      </span>
-                      <p className="text-[11px] text-stone-500 truncate max-w-xs">
-                        {ord.orderType === 'dine-in'
-                          ? `Table: ${ord.tableNumber || 'N/A'}`
-                          : ord.deliveryAddress || 'Takeaway'}
-                      </p>
-                    </td>
-                    <td className="p-4">
-                      <p className="font-semibold text-stone-800 dark:text-stone-200">
-                        {ord.items.length} item{ord.items.length > 1 ? 's' : ''}
-                      </p>
-                      <p className="text-[11px] text-stone-500 truncate max-w-xs">
-                        {ord.items.map((it) => `${it.quantity}x ${it.name}`).join(', ')}
-                      </p>
-                    </td>
-                    <td className="p-4 font-mono">
-                      <p className="font-bold text-stone-900 dark:text-stone-100">
-                        ₹{ord.total.toFixed(2)}
-                      </p>
-                      <span className="text-[10px] uppercase text-emerald-600 dark:text-emerald-400 font-semibold">
-                        {ord.paymentMethod} • {ord.paymentStatus}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      {ord.acceptedBy ? (
-                        <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-                          <UserCheck className="w-3.5 h-3.5 shrink-0" />
-                          <div>
-                            <span className="font-bold text-[11px] block">{ord.acceptedBy}</span>
-                            {ord.estimatedTimeMinutes && (
-                              <span className="text-[10px] text-stone-400 font-mono">
-                                {ord.estimatedTimeMinutes} min
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleOpenAcceptModal(ord)}
-                          className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold shadow-xs cursor-pointer flex items-center gap-1"
-                        >
-                          <ChefHat className="w-3 h-3" />
-                          <span>Accept</span>
-                        </button>
-                      )}
-                    </td>
-                    <td className="p-4">
-                      <span
-                        className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                          ord.status === 'pending'
-                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                            : ord.status === 'accepted'
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                            : ord.status === 'preparing'
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                            : ord.status === 'ready'
-                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
-                            : ord.status === 'delivered'
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                            : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                {filteredOrders.map((ord) => {
+                  const isExpanded = expandedOrderIds.has(ord.id);
+                  return (
+                    <React.Fragment key={ord.id}>
+                      <tr
+                        onClick={() => toggleExpandOrder(ord.id)}
+                        className={`hover:bg-stone-50/70 dark:hover:bg-stone-800/40 transition-colors cursor-pointer ${
+                          isExpanded ? 'bg-amber-50/20 dark:bg-amber-950/20' : ''
                         }`}
                       >
-                        {ord.status}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <button
-                        onClick={() => {
-                          setInspectingOrder(ord);
-                          setIsKotMode(false);
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 text-xs font-semibold cursor-pointer"
-                      >
-                        Details
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                        <td className="p-4 font-mono font-bold text-sm text-stone-900 dark:text-stone-100">
+                          #{ord.id}
+                        </td>
+                        <td className="p-4 font-mono text-stone-500">
+                          {new Date(ord.createdAt).toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                          ,{' '}
+                          {new Date(ord.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                        <td className="p-4 font-bold text-stone-900 dark:text-stone-100">
+                          {ord.customerName}
+                        </td>
+                        <td className="p-4">
+                          <span
+                            className={`text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full ${
+                              ord.status === 'pending'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                : ord.status === 'accepted'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : ord.status === 'preparing'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                : ord.status === 'ready'
+                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+                                : ord.status === 'delivered'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                            }`}
+                          >
+                            {ord.status}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpandOrder(ord.id);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 text-xs font-semibold cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <span>{isExpanded ? 'Hide' : 'Expand'}</span>
+                            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Expanded Row in Table Mode */}
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={5} className="p-4 bg-stone-50 dark:bg-stone-850/60 border-b border-stone-200 dark:border-stone-800">
+                            <div className="space-y-3 text-xs">
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 dark:border-stone-700 pb-2">
+                                <div className="flex items-center gap-3">
+                                  <span>Phone: <strong>{ord.customerPhone}</strong></span>
+                                  <span>Type: <strong className="uppercase">{ord.orderType}</strong></span>
+                                  <span>Total: <strong className="font-mono text-amber-600">₹{ord.total.toFixed(2)}</strong></span>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleDownloadInvoice(ord)}
+                                    className="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-bold cursor-pointer flex items-center gap-1"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    <span>Download Bill (PDF)</span>
+                                  </button>
+                                  {ord.status !== 'cancelled' && (
+                                    <button
+                                      onClick={() => setCancellingOrder(ord)}
+                                      className="px-2 py-1 rounded-lg bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 font-semibold cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => setDeletingOrder(ord)}
+                                    className="px-2 py-1 rounded-lg bg-stone-200 dark:bg-stone-700 hover:text-rose-600 text-stone-600 dark:text-stone-300 font-semibold cursor-pointer"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div>
+                                <p className="font-semibold text-stone-500 mb-1">Items ({ord.items.length}):</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {ord.items.map((it, idx) => (
+                                    <span key={idx} className="px-2 py-1 rounded-md bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 font-mono">
+                                      {it.quantity}x {it.name} (₹{it.price})
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -830,7 +1142,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
       {acceptingOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-md rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95">
-            {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-stone-800">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold">
@@ -841,7 +1152,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                     Accept Kitchen Order
                   </h3>
                   <p className="text-xs font-mono text-stone-500">
-                    {acceptingOrder.id} • {acceptingOrder.customerName}
+                    #{acceptingOrder.id} • {acceptingOrder.customerName}
                   </p>
                 </div>
               </div>
@@ -853,7 +1164,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
               </button>
             </div>
 
-            {/* Quick Summary of items */}
             <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 text-xs space-y-1.5">
               <div className="flex justify-between font-bold text-stone-700 dark:text-stone-300">
                 <span>Items to Prepare:</span>
@@ -864,7 +1174,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
               </p>
             </div>
 
-            {/* Staff Selection */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider block">
                 Assigning Staff / Chef Member
@@ -897,7 +1206,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
               />
             </div>
 
-            {/* Estimated Preparation Time */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
@@ -925,7 +1233,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
               </div>
             </div>
 
-            {/* Kitchen Notes */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider block">
                 Status Note / Kitchen Instructions
@@ -934,12 +1241,11 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                 type="text"
                 value={kitchenNotes}
                 onChange={(e) => setKitchenNotes(e.target.value)}
-                placeholder="e.g. Order accepted, tandoori items placed on fire"
+                placeholder="e.g. Order accepted, bakery items in oven"
                 className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 text-xs text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
               />
             </div>
 
-            {/* Action Buttons */}
             <div className="flex items-center gap-2 pt-2">
               <button
                 type="button"
@@ -970,12 +1276,152 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
       )}
 
       {/* ============================================================== */}
-      {/* MODAL 2: DETAILED ORDER INSPECTION & KITCHEN ORDER TICKET (KOT) */}
+      {/* MODAL 2: CANCEL ANY ORDER CONFIRMATION DIALOG */}
+      {/* ============================================================== */}
+      {cancellingOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-md rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-stone-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center font-bold">
+                  <Ban className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-serif font-bold text-stone-900 dark:text-stone-100">
+                    Cancel Order
+                  </h3>
+                  <p className="text-xs font-mono text-stone-500">
+                    Order #{cancellingOrder.id} • {cancellingOrder.customerName}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCancellingOrder(null)}
+                className="p-2 rounded-xl text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
+              Are you sure you want to cancel order <strong>#{cancellingOrder.id}</strong>? The status will be changed to <strong>Cancelled</strong> and synced to the Supabase database.
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider block">
+                Reason for Cancellation
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={3}
+                placeholder="Specify reason (e.g. customer called to cancel, kitchen ran out of ingredients)..."
+                className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 text-xs text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-hidden focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setCancellingOrder(null)}
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-xs font-semibold text-stone-700 dark:text-stone-300 cursor-pointer"
+              >
+                Dismiss
+              </button>
+              <button
+                id="btn-confirm-cancel-order"
+                type="button"
+                disabled={isSubmittingCancel}
+                onClick={handleConfirmCancel}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+              >
+                {isSubmittingCancel ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Ban className="w-4 h-4" />
+                    <span>Confirm Cancellation</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 3: DELETE / REMOVE ORDER HISTORY RECORD DIALOG */}
+      {/* ============================================================== */}
+      {deletingOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-md rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-stone-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-stone-900 text-rose-500 flex items-center justify-center font-bold">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-serif font-bold text-stone-900 dark:text-stone-100">
+                    Remove Order History
+                  </h3>
+                  <p className="text-xs font-mono text-stone-500">
+                    Permanently delete #{deletingOrder.id}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDeletingOrder(null)}
+                className="p-2 rounded-xl text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-xs text-rose-900 dark:text-rose-300 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-rose-600" />
+                <span>Permanent Database Deletion</span>
+              </p>
+              <p className="text-[11px] text-rose-700 dark:text-rose-400">
+                This action will permanently wipe order <strong>#{deletingOrder.id}</strong> (Customer: {deletingOrder.customerName}, ₹{deletingOrder.total.toFixed(2)}) from the order history and the Supabase database. This cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingOrder(null)}
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-xs font-semibold text-stone-700 dark:text-stone-300 cursor-pointer"
+              >
+                Keep Order
+              </button>
+              <button
+                id="btn-confirm-delete-order"
+                type="button"
+                disabled={isSubmittingDelete}
+                onClick={handleConfirmDelete}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+              >
+                {isSubmittingDelete ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete Record Permanently</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 4: DETAILED ORDER INSPECTION & KITCHEN ORDER TICKET (KOT) */}
       {/* ============================================================== */}
       {inspectingOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="relative w-full max-w-xl rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95">
-            {/* Modal Header */}
             <div className="p-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-50/50 dark:bg-stone-850/50">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-2xl bg-amber-600 text-white flex items-center justify-center font-bold">
@@ -987,7 +1433,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                       Order Details & KOT
                     </h3>
                     <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-200">
-                      {inspectingOrder.id}
+                      #{inspectingOrder.id}
                     </span>
                   </div>
                   <p className="text-xs text-stone-400 font-mono">
@@ -1017,7 +1463,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
               </div>
             </div>
 
-            {/* Modal Body */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               {isKotMode ? (
                 /* Kitchen Order Ticket (KOT) Thermal Receipt Preview */
@@ -1045,7 +1490,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                     </div>
                   )}
 
-                  {/* Items List */}
                   <div className="space-y-2 py-2">
                     <div className="flex justify-between font-bold text-xs pb-1 border-b border-stone-300">
                       <span>QTY & ITEM NAME</span>
@@ -1075,13 +1519,14 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                       <Printer className="w-3.5 h-3.5" />
                       <span>Print KOT</span>
                     </button>
-                    <span className="text-[11px] text-stone-500">Total Items: {inspectingOrder.items.reduce((acc, it) => acc + it.quantity, 0)}</span>
+                    <span className="text-[11px] text-stone-500">
+                      Total Items: {inspectingOrder.items.reduce((acc, it) => acc + it.quantity, 0)}
+                    </span>
                   </div>
                 </div>
               ) : (
                 /* Full Order Details */
                 <div className="space-y-5">
-                  {/* Status and Staff Banner */}
                   <div className="p-4 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 flex items-center justify-between">
                     <div>
                       <span className="text-xs uppercase font-bold text-amber-700 dark:text-amber-300">
@@ -1109,7 +1554,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                     </div>
                   </div>
 
-                  {/* Customer Information Box */}
                   <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 space-y-2 text-xs">
                     <h4 className="font-bold text-stone-800 dark:text-stone-200 uppercase tracking-wider">
                       Customer Information
@@ -1133,17 +1577,9 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                           </a>
                         </p>
                       </div>
-                      {inspectingOrder.customerEmail && (
-                        <div>
-                          <span className="text-stone-400">Email Address</span>
-                          <p className="font-medium text-stone-700 dark:text-stone-300">
-                            {inspectingOrder.customerEmail}
-                          </p>
-                        </div>
-                      )}
                       {inspectingOrder.deliveryAddress && (
                         <div className="sm:col-span-2">
-                          <span className="text-stone-400">Highway Delivery Address</span>
+                          <span className="text-stone-400">Delivery Address</span>
                           <p className="font-medium text-stone-700 dark:text-stone-300 flex items-start gap-1 mt-0.5">
                             <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
                             <span>{inspectingOrder.deliveryAddress}</span>
@@ -1153,7 +1589,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                     </div>
                   </div>
 
-                  {/* Itemized Order List */}
                   <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 space-y-3">
                     <h4 className="text-xs font-bold text-stone-800 dark:text-stone-200 uppercase tracking-wider">
                       Ordered Dishes & Bakery Items
@@ -1182,7 +1617,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                       ))}
                     </div>
 
-                    {/* Financial Breakdown */}
                     <div className="pt-3 border-t border-stone-200 dark:border-stone-700 space-y-1.5 text-xs">
                       <div className="flex justify-between text-stone-500">
                         <span>Subtotal</span>
@@ -1190,22 +1624,16 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                       </div>
                       {inspectingOrder.discount > 0 && (
                         <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
-                          <span>Promo Discount ({inspectingOrder.promoCode || 'OFFER'})</span>
+                          <span>Discount</span>
                           <span className="font-mono">-₹{inspectingOrder.discount.toFixed(2)}</span>
                         </div>
                       )}
-                      <div className="flex justify-between text-stone-500">
-                        <span>Delivery Fee</span>
-                        <span className="font-mono">
-                          {inspectingOrder.deliveryFee === 0 ? 'FREE' : `₹${inspectingOrder.deliveryFee.toFixed(2)}`}
-                        </span>
-                      </div>
                       <div className="flex justify-between text-stone-500">
                         <span>GST (5%)</span>
                         <span className="font-mono">₹{inspectingOrder.tax.toFixed(2)}</span>
                       </div>
                       <div className="pt-2 border-t border-stone-200 dark:border-stone-700 flex justify-between items-center font-bold text-sm">
-                        <span>Grand Total Paid</span>
+                        <span>Grand Total</span>
                         <span className="font-mono text-amber-600 dark:text-amber-400 text-base">
                           ₹{inspectingOrder.total.toFixed(2)}
                         </span>
@@ -1216,11 +1644,14 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
               )}
             </div>
 
-            {/* Modal Footer */}
             <div className="p-4 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-50/50 dark:bg-stone-850/50">
-              <span className="text-xs text-stone-500">
-                Payment: <strong className="uppercase text-stone-800 dark:text-stone-200">{inspectingOrder.paymentMethod}</strong> ({inspectingOrder.paymentStatus})
-              </span>
+              <button
+                onClick={() => handleDownloadInvoice(inspectingOrder)}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold cursor-pointer flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download Bill (PDF)</span>
+              </button>
               <button
                 onClick={() => setInspectingOrder(null)}
                 className="px-4 py-2 rounded-xl bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 text-stone-800 dark:text-stone-200 text-xs font-semibold cursor-pointer"

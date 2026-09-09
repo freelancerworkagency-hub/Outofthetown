@@ -215,6 +215,40 @@ export const api = {
     if (!json.success) throw new Error(json.error || 'Failed to delete banner');
   },
 
+  // Order Management: Cancel & Delete & Invoice
+  async cancelOrder(token: string, orderId: string, reason?: string): Promise<Order> {
+    const res = await fetch(`${BASE_URL}/admin/orders/${orderId}/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ reason: reason || 'Cancelled by staff / customer request' }),
+    });
+    const json: ApiResponse<Order> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to cancel order');
+    return json.data;
+  },
+
+  async deleteOrder(token: string, orderId: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/admin/orders/${orderId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<void> = await res.json();
+    if (!json.success) throw new Error(json.error || 'Failed to delete order history record');
+  },
+
+  async registerInvoice(token: string, orderId: string): Promise<any> {
+    const res = await fetch(`${BASE_URL}/admin/orders/${orderId}/invoice`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<any> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to register invoice');
+    return json.data;
+  },
+
   // Supabase Database Management
   async getSupabaseStatus(token: string): Promise<{
     configured: boolean;

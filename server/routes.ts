@@ -278,8 +278,8 @@ apiRouter.get('/admin/orders', requireAdmin, async (req: Request, res: Response)
       const localOnly = store.orders.filter((o) => !existingIds.has(o.id));
       store.orders = [...sbOrders, ...localOnly];
     }
-  } catch (err) {
-    console.warn('Could not fetch orders from Supabase, using in-memory store:', err);
+  } catch {
+    // In-memory fallback
   }
   res.json({ success: true, data: store.orders });
 });
@@ -325,6 +325,82 @@ apiRouter.patch('/admin/orders/:id/status', requireAdmin, async (req: Request, r
   res.json({ success: true, message: 'Order status updated', data: order });
 });
 
+// Cancel any order (admin)
+apiRouter.post('/admin/orders/:id/cancel', requireAdmin, async (req: Request, res: Response) => {
+  const order = store.orders.find((o) => o.id === req.params.id);
+  if (!order) {
+    return res.status(404).json({ success: false, error: 'Order not found' });
+  }
+
+  const reason = req.body.reason || 'Cancelled by restaurant management / customer request';
+  order.status = 'cancelled';
+  order.statusNotes = reason;
+
+  await SupabaseService.updateOrderStatus(order.id, 'cancelled', { notes: reason }).catch((err) => {
+    console.warn('Supabase: failed to update cancelled status:', err);
+  });
+
+  res.json({ success: true, message: `Order #${order.id} has been cancelled`, data: order });
+});
+
+// Delete / Remove order history record permanently (admin)
+apiRouter.delete('/admin/orders/:id', requireAdmin, async (req: Request, res: Response) => {
+  const index = store.orders.findIndex((o) => o.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ success: false, error: 'Order not found in records' });
+  }
+
+  const [deletedOrder] = store.orders.splice(index, 1);
+
+  await SupabaseService.deleteOrder(req.params.id).catch((err) => {
+    console.warn(`Supabase: failed to delete order ${req.params.id}:`, err);
+  });
+
+  res.json({
+    success: true,
+    message: `Order #${req.params.id} permanently removed from history and database`,
+    data: deletedOrder,
+  });
+});
+
+// Generate and record invoice / bill in Supabase (admin)
+apiRouter.post('/admin/orders/:id/invoice', requireAdmin, async (req: Request, res: Response) => {
+  const order = store.orders.find((o) => o.id === req.params.id);
+  if (!order) {
+    return res.status(404).json({ success: false, error: 'Order not found' });
+  }
+
+  const invoiceNumber = `INV-${order.id.replace(/[^a-zA-Z0-9]/g, '')}`;
+  const invoiceData = {
+    id: `inv-${order.id}`,
+    orderId: order.id,
+    invoiceNumber,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    subtotal: order.subtotal,
+    discount: order.discount,
+    deliveryFee: order.deliveryFee,
+    tax: order.tax,
+    total: order.total,
+    paymentMethod: order.paymentMethod,
+    items: order.items,
+    createdAt: new Date().toISOString(),
+  };
+
+  await SupabaseService.saveInvoice(invoiceData).catch((err) => {
+    console.warn('Supabase: failed to save invoice record:', err);
+  });
+
+  res.json({
+    success: true,
+    message: 'Official invoice generated and saved to Supabase',
+    data: {
+      ...invoiceData,
+      cafe: store.cafeInfo,
+    },
+  });
+});
+
 // Get all reservations (admin)
 apiRouter.get('/admin/reservations', requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -334,8 +410,8 @@ apiRouter.get('/admin/reservations', requireAdmin, async (req: Request, res: Res
       const localOnly = store.reservations.filter((r) => !existingIds.has(r.id));
       store.reservations = [...sbReservations, ...localOnly];
     }
-  } catch (err) {
-    console.warn('Could not fetch reservations from Supabase, using in-memory store:', err);
+  } catch {
+    // In-memory fallback
   }
   res.json({ success: true, data: store.reservations });
 });
@@ -363,7 +439,7 @@ apiRouter.patch('/admin/reservations/:id/status', requireAdmin, async (req: Requ
 });
 
 // Add new menu item (admin)
-apiRouter.post('/admin/menu', requireAdmin, (req: Request, res: Response) => {
+apiRouter.post('/admin/menu', requireAdmin, async (req: Request, res: Response) => {
   const validation = MenuItemSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ success: false, error: 'Invalid menu item data', details: validation.error });
@@ -379,11 +455,15 @@ apiRouter.post('/admin/menu', requireAdmin, (req: Request, res: Response) => {
   };
 
   store.menuItems.unshift(newItem);
-  res.status(201).json({ success: true, message: 'Menu item created', data: newItem });
+  await SupabaseService.saveMenuItem(newItem).catch((err) => {
+    console.warn('Supabase: failed to save menu item:', err);
+  });
+
+  res.status(201).json({ success: true, message: 'Menu item created and saved to database', data: newItem });
 });
 
 // Edit menu item (admin)
-apiRouter.put('/admin/menu/:id', requireAdmin, (req: Request, res: Response) => {
+apiRouter.put('/admin/menu/:id', requireAdmin, async (req: Request, res: Response) => {
   const validation = MenuItemSchema.partial().safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ success: false, error: 'Invalid menu item data', details: validation.error });
@@ -399,18 +479,26 @@ apiRouter.put('/admin/menu/:id', requireAdmin, (req: Request, res: Response) => 
     ...validation.data,
   };
 
-  res.json({ success: true, message: 'Menu item updated', data: store.menuItems[index] });
+  await SupabaseService.saveMenuItem(store.menuItems[index]).catch((err) => {
+    console.warn('Supabase: failed to update menu item:', err);
+  });
+
+  res.json({ success: true, message: 'Menu item updated in database', data: store.menuItems[index] });
 });
 
 // Delete menu item (admin)
-apiRouter.delete('/admin/menu/:id', requireAdmin, (req: Request, res: Response) => {
+apiRouter.delete('/admin/menu/:id', requireAdmin, async (req: Request, res: Response) => {
   const index = store.menuItems.findIndex((m) => m.id === req.params.id);
   if (index === -1) {
     return res.status(404).json({ success: false, error: 'Menu item not found' });
   }
 
   const deleted = store.menuItems.splice(index, 1);
-  res.json({ success: true, message: 'Menu item deleted', data: deleted[0] });
+  await SupabaseService.deleteMenuItem(req.params.id).catch((err) => {
+    console.warn('Supabase: failed to delete menu item:', err);
+  });
+
+  res.json({ success: true, message: 'Menu item deleted from database', data: deleted[0] });
 });
 
 // Manage Promotional Banners (admin)
@@ -418,7 +506,7 @@ apiRouter.get('/admin/banners', requireAdmin, (req: Request, res: Response) => {
   res.json({ success: true, data: store.promoBanners });
 });
 
-apiRouter.post('/admin/banners', requireAdmin, (req: Request, res: Response) => {
+apiRouter.post('/admin/banners', requireAdmin, async (req: Request, res: Response) => {
   const validation = PromoBannerSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ success: false, error: 'Invalid banner data', details: validation.error });
@@ -432,10 +520,14 @@ apiRouter.post('/admin/banners', requireAdmin, (req: Request, res: Response) => 
   };
 
   store.promoBanners.unshift(newBanner);
-  res.status(201).json({ success: true, message: 'Banner added', data: newBanner });
+  await SupabaseService.saveBanner(newBanner).catch((err) => {
+    console.warn('Supabase: failed to save banner:', err);
+  });
+
+  res.status(201).json({ success: true, message: 'Banner added and saved to database', data: newBanner });
 });
 
-apiRouter.put('/admin/banners/:id', requireAdmin, (req: Request, res: Response) => {
+apiRouter.put('/admin/banners/:id', requireAdmin, async (req: Request, res: Response) => {
   const validation = PromoBannerSchema.partial().safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ success: false, error: 'Invalid banner data', details: validation.error });
@@ -451,26 +543,39 @@ apiRouter.put('/admin/banners/:id', requireAdmin, (req: Request, res: Response) 
     ...validation.data,
   };
 
-  res.json({ success: true, message: 'Banner updated', data: store.promoBanners[index] });
+  await SupabaseService.saveBanner(store.promoBanners[index]).catch((err) => {
+    console.warn('Supabase: failed to update banner:', err);
+  });
+
+  res.json({ success: true, message: 'Banner updated in database', data: store.promoBanners[index] });
 });
 
-apiRouter.delete('/admin/banners/:id', requireAdmin, (req: Request, res: Response) => {
+apiRouter.delete('/admin/banners/:id', requireAdmin, async (req: Request, res: Response) => {
   const index = store.promoBanners.findIndex((b) => b.id === req.params.id);
   if (index === -1) {
     return res.status(404).json({ success: false, error: 'Banner not found' });
   }
 
   const deleted = store.promoBanners.splice(index, 1);
-  res.json({ success: true, message: 'Banner deleted', data: deleted[0] });
+  await SupabaseService.deleteBanner(req.params.id).catch((err) => {
+    console.warn('Supabase: failed to delete banner:', err);
+  });
+
+  res.json({ success: true, message: 'Banner deleted from database', data: deleted[0] });
 });
 
 // Update Cafe Info (admin)
-apiRouter.put('/admin/cafe-info', requireAdmin, (req: Request, res: Response) => {
+apiRouter.put('/admin/cafe-info', requireAdmin, async (req: Request, res: Response) => {
   store.cafeInfo = {
     ...store.cafeInfo,
     ...req.body,
   };
-  res.json({ success: true, message: 'Cafe details updated', data: store.cafeInfo });
+
+  await SupabaseService.saveCafeInfo(store.cafeInfo).catch((err) => {
+    console.warn('Supabase: failed to save cafe info:', err);
+  });
+
+  res.json({ success: true, message: 'Cafe details updated and stored in database', data: store.cafeInfo });
 });
 
 // ==========================================
@@ -506,10 +611,21 @@ apiRouter.get('/admin/supabase/schema', requireAdmin, (req: Request, res: Respon
   });
 });
 
-// Bulk sync existing in-memory data to Supabase
+// Bulk sync existing in-memory data to Supabase (orders, reservations, menu, banners, cafe-info)
 apiRouter.post('/admin/supabase/sync-all', requireAdmin, async (req: Request, res: Response) => {
+  const activeTables = await SupabaseService.getActiveTables(true);
+  if (activeTables.size === 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'No tables detected in Supabase schema cache yet. Please copy the SQL schema from below and run it in your Supabase SQL Editor first.',
+      needsSchemaSetup: true,
+    });
+  }
+
   let ordersCount = 0;
   let resvCount = 0;
+  let menuCount = 0;
+  let bannersCount = 0;
 
   for (const order of store.orders) {
     const ok = await SupabaseService.saveOrder(order);
@@ -521,14 +637,35 @@ apiRouter.post('/admin/supabase/sync-all', requireAdmin, async (req: Request, re
     if (ok) resvCount++;
   }
 
+  for (const m of store.menuItems) {
+    const ok = await SupabaseService.saveMenuItem(m);
+    if (ok) menuCount++;
+  }
+
+  for (const b of store.promoBanners) {
+    const ok = await SupabaseService.saveBanner(b);
+    if (ok) bannersCount++;
+  }
+
+  await SupabaseService.saveCafeInfo(store.cafeInfo);
+
   res.json({
     success: true,
-    message: `Synchronized ${ordersCount} orders and ${resvCount} reservations with Supabase.`,
+    message: `Synchronized ${ordersCount} orders, ${resvCount} reservations, ${menuCount} menu items, and ${bannersCount} banners with Supabase.`,
     data: {
       syncedOrders: ordersCount,
       syncedReservations: resvCount,
+      syncedMenu: menuCount,
+      syncedBanners: bannersCount,
       totalOrders: store.orders.length,
       totalReservations: store.reservations.length,
+      totalMenuItems: store.menuItems.length,
+      totalBanners: store.promoBanners.length,
     },
   });
+});
+
+// Auto-hydrate store from Supabase on module load / server boot
+SupabaseService.hydrateStoreFromSupabase(store).catch((err) => {
+  console.warn('Startup Supabase hydration error:', err);
 });

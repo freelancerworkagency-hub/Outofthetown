@@ -132,14 +132,14 @@ export const OfferComboView: React.FC<OfferComboViewProps> = ({
 
       {/* Hero Offer Banner Card */}
       <div className="relative rounded-3xl overflow-hidden shadow-xl bg-stone-900 border border-stone-800">
-        {/* Background Image with Ambient Darkness */}
+        {/* Background Image with Balanced Warm Ambient Tone */}
         <div className="absolute inset-0">
           <img
             src={banner.imageUrl}
             alt={banner.title}
-            className="w-full h-full object-cover object-center brightness-[0.35]"
+            className="w-full h-full object-cover object-center brightness-[0.76]"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/70 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-stone-950/35 to-transparent" />
         </div>
 
         {/* Content Box */}

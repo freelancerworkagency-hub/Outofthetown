@@ -364,6 +364,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onUpdateOrderStatus={handleUpdateOrderStatus}
             onRefresh={loadAllData}
             isLoading={isLoading}
+            cafeInfo={cafeInfo}
           />
         )}
 
