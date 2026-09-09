@@ -1,0 +1,257 @@
+import type { MenuItem, Category, Order, Reservation, PromoBanner, CafeInfo } from '../types.js';
+
+const BASE_URL = '/api';
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  token?: string;
+  retryAfterSeconds?: number;
+}
+
+export const api = {
+  // Public
+  async getCafeInfo(): Promise<CafeInfo> {
+    const res = await fetch(`${BASE_URL}/cafe-info`);
+    const json: ApiResponse<CafeInfo> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to fetch cafe info');
+    return json.data;
+  },
+
+  async getCategories(): Promise<Category[]> {
+    const res = await fetch(`${BASE_URL}/categories`);
+    const json: ApiResponse<Category[]> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to fetch categories');
+    return json.data;
+  },
+
+  async getPromoBanners(): Promise<PromoBanner[]> {
+    const res = await fetch(`${BASE_URL}/banners`);
+    const json: ApiResponse<PromoBanner[]> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to fetch banners');
+    return json.data;
+  },
+
+  async getMenuItems(params?: { category?: string; isVeg?: boolean; search?: string }): Promise<MenuItem[]> {
+    const query = new URLSearchParams();
+    if (params?.category && params.category !== 'all') query.append('category', params.category);
+    if (params?.isVeg !== undefined) query.append('isVeg', String(params.isVeg));
+    if (params?.search) query.append('search', params.search);
+
+    const url = `${BASE_URL}/menu${query.toString() ? `?${query.toString()}` : ''}`;
+    const res = await fetch(url);
+    const json: ApiResponse<MenuItem[]> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to fetch menu items');
+    return json.data;
+  },
+
+  async createOrder(payload: any): Promise<Order> {
+    const res = await fetch(`${BASE_URL}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const json: ApiResponse<Order> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to place order');
+    return json.data;
+  },
+
+  async getOrder(id: string): Promise<Order> {
+    const res = await fetch(`${BASE_URL}/orders/${id}`);
+    const json: ApiResponse<Order> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Order not found');
+    return json.data;
+  },
+
+  async createReservation(payload: any): Promise<Reservation> {
+    const res = await fetch(`${BASE_URL}/reservations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const json: ApiResponse<Reservation> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to make reservation');
+    return json.data;
+  },
+
+  // Admin Auth
+  async adminLogin(password: string): Promise<string> {
+    const res = await fetch(`${BASE_URL}/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    const json: ApiResponse<void> = await res.json();
+    if (!json.success || !json.token) throw new Error(json.error || 'Admin login failed');
+    return json.token;
+  },
+
+  // Admin Actions
+  async getAdminOrders(token: string): Promise<Order[]> {
+    const res = await fetch(`${BASE_URL}/admin/orders`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<Order[]> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to load admin orders');
+    return json.data;
+  },
+
+  async updateOrderStatus(
+    token: string,
+    orderId: string,
+    status: string,
+    options?: {
+      notes?: string;
+      acceptedBy?: string;
+      acceptedAt?: string;
+      estimatedTimeMinutes?: number;
+    } | string
+  ): Promise<Order> {
+    const payload: Record<string, any> = { status };
+    if (typeof options === 'string') {
+      payload.statusNotes = options;
+    } else if (options) {
+      if (options.notes !== undefined) payload.statusNotes = options.notes;
+      if (options.acceptedBy !== undefined) payload.acceptedBy = options.acceptedBy;
+      if (options.acceptedAt !== undefined) payload.acceptedAt = options.acceptedAt;
+      if (options.estimatedTimeMinutes !== undefined) payload.estimatedTimeMinutes = options.estimatedTimeMinutes;
+    }
+
+    const res = await fetch(`${BASE_URL}/admin/orders/${orderId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const json: ApiResponse<Order> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to update order');
+    return json.data;
+  },
+
+  async getAdminReservations(token: string): Promise<Reservation[]> {
+    const res = await fetch(`${BASE_URL}/admin/reservations`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<Reservation[]> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to load reservations');
+    return json.data;
+  },
+
+  async updateReservationStatus(token: string, reservationId: string, status: string): Promise<Reservation> {
+    const res = await fetch(`${BASE_URL}/admin/reservations/${reservationId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+    const json: ApiResponse<Reservation> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to update reservation');
+    return json.data;
+  },
+
+  async addMenuItem(token: string, item: Partial<MenuItem>): Promise<MenuItem> {
+    const res = await fetch(`${BASE_URL}/admin/menu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(item),
+    });
+    const json: ApiResponse<MenuItem> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to add menu item');
+    return json.data;
+  },
+
+  async updateMenuItem(token: string, id: string, updates: Partial<MenuItem>): Promise<MenuItem> {
+    const res = await fetch(`${BASE_URL}/admin/menu/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(updates),
+    });
+    const json: ApiResponse<MenuItem> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to update menu item');
+    return json.data;
+  },
+
+  async deleteMenuItem(token: string, id: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/admin/menu/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<void> = await res.json();
+    if (!json.success) throw new Error(json.error || 'Failed to delete menu item');
+  },
+
+  async addPromoBanner(token: string, banner: Partial<PromoBanner>): Promise<PromoBanner> {
+    const res = await fetch(`${BASE_URL}/admin/banners`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(banner),
+    });
+    const json: ApiResponse<PromoBanner> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to add banner');
+    return json.data;
+  },
+
+  async deletePromoBanner(token: string, id: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/admin/banners/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<void> = await res.json();
+    if (!json.success) throw new Error(json.error || 'Failed to delete banner');
+  },
+
+  // Supabase Database Management
+  async getSupabaseStatus(token: string): Promise<{
+    configured: boolean;
+    url: string | null;
+    connected: boolean;
+    tablesFound: string[];
+    error?: string;
+  }> {
+    const res = await fetch(`${BASE_URL}/admin/supabase/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<any> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to check Supabase status');
+    return json.data;
+  },
+
+  async getSupabaseSchema(token: string): Promise<string> {
+    const res = await fetch(`${BASE_URL}/admin/supabase/schema`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<{ sql: string }> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to fetch schema');
+    return json.data.sql;
+  },
+
+  async syncSupabaseAll(token: string): Promise<{
+    syncedOrders: number;
+    syncedReservations: number;
+    totalOrders: number;
+    totalReservations: number;
+  }> {
+    const res = await fetch(`${BASE_URL}/admin/supabase/sync-all`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<any> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to sync with Supabase');
+    return json.data;
+  },
+};
