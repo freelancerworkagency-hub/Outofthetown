@@ -19,6 +19,7 @@ import {
   Flame,
 } from 'lucide-react';
 import { ThemeProvider } from './context/ThemeContext.js';
+import { AuthProvider } from './context/AuthContext.js';
 import { CartProvider, useCart } from './context/CartContext.js';
 import { Navbar } from './components/Navbar.js';
 import { TopPromotionalHero } from './components/TopPromotionalHero.js';
@@ -28,6 +29,7 @@ import { FilterBar } from './components/FilterBar.js';
 import { MenuItemCard } from './components/MenuItemCard.js';
 import { OfferComboView } from './components/OfferComboView.js';
 import { CartDrawer } from './components/CartDrawer.js';
+import { CustomerAuthModal } from './components/CustomerAuthModal.js';
 import { ReservationModal } from './components/ReservationModal.js';
 import { CustomerProfileModal } from './components/CustomerProfileModal.js';
 import { OrderStatusModal } from './components/OrderStatusModal.js';
@@ -454,7 +456,7 @@ function CafeHome() {
               /* Grid of Food Items with Framer Motion entry */
               <motion.div
                 layout
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch"
               >
                 <AnimatePresence mode="popLayout">
                   {filteredItems.map((item) => (
@@ -465,6 +467,7 @@ function CafeHome() {
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.96 }}
                       transition={{ duration: 0.2 }}
+                      className="h-full flex flex-col"
                     >
                       <MenuItemCard
                         item={item}
@@ -684,6 +687,9 @@ function CafeHome() {
         }}
       />
 
+      {/* Customer OTP / Login Authentication Modal */}
+      <CustomerAuthModal />
+
       {/* Table Reservation Modal */}
       <ReservationModal
         isOpen={isReservationOpen}
@@ -719,6 +725,13 @@ function CafeHome() {
           token={adminToken}
           onLogout={handleAdminLogout}
           onClose={() => setIsAdminDashboardOpen(false)}
+          menuItems={menuItems}
+          promoBanners={promoBanners}
+          cafeInfo={cafeInfo}
+          categories={categories}
+          onUpdateMenuItems={(newItems) => setMenuItems(newItems)}
+          onUpdatePromoBanners={(newBanners) => setPromoBanners(newBanners)}
+          onUpdateCategories={(newCats) => setCategories(newCats)}
           onMenuUpdated={fetchData}
         />
       )}
@@ -814,9 +827,11 @@ function CafeHome() {
 export default function App() {
   return (
     <ThemeProvider>
-      <CartProvider>
-        <CafeHome />
-      </CartProvider>
+      <AuthProvider>
+        <CartProvider>
+          <CafeHome />
+        </CartProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

@@ -1,4 +1,4 @@
-import type { MenuItem, Category, Order, Reservation, PromoBanner, CafeInfo } from '../types.js';
+import type { MenuItem, Category, Order, Reservation, PromoBanner, CafeInfo, Customer } from '../types.js';
 
 const BASE_URL = '/api';
 
@@ -12,6 +12,67 @@ export interface ApiResponse<T> {
 }
 
 export const api = {
+  // Customer Auth (Email + Mobile OTP)
+  async sendCustomerOtp(payload: { email: string; phone: string; name?: string }): Promise<{
+    message: string;
+    phone: string;
+    otpPreview?: string;
+  }> {
+    const res = await fetch(`${BASE_URL}/auth/customer/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Failed to send verification code');
+    return { message: json.message, phone: json.phone, otpPreview: json.otpPreview };
+  },
+
+  async verifyCustomerOtp(payload: {
+    email: string;
+    phone: string;
+    otp: string;
+    name?: string;
+  }): Promise<{ customer: Customer; token: string }> {
+    const res = await fetch(`${BASE_URL}/auth/customer/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!json.success || !json.customer || !json.token) {
+      throw new Error(json.error || 'Failed to verify code');
+    }
+    return { customer: json.customer, token: json.token };
+  },
+
+  async getCustomerProfile(token: string): Promise<Customer> {
+    const res = await fetch(`${BASE_URL}/user/profile`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<Customer> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to fetch customer profile');
+    return json.data;
+  },
+
+  async getMyOrders(token: string): Promise<Order[]> {
+    const res = await fetch(`${BASE_URL}/user/orders`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<Order[]> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to fetch your orders');
+    return json.data;
+  },
+
+  async getMyReservations(token: string): Promise<Reservation[]> {
+    const res = await fetch(`${BASE_URL}/user/reservations`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<Reservation[]> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to fetch your reservations');
+    return json.data;
+  },
+
   // Public
   async getCafeInfo(): Promise<CafeInfo> {
     const res = await fetch(`${BASE_URL}/cafe-info`);
@@ -47,10 +108,12 @@ export const api = {
     return json.data;
   },
 
-  async createOrder(payload: any): Promise<Order> {
+  async createOrder(payload: any, token?: string): Promise<Order> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${BASE_URL}/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
     const json: ApiResponse<Order> = await res.json();
@@ -58,17 +121,21 @@ export const api = {
     return json.data;
   },
 
-  async getOrder(id: string): Promise<Order> {
-    const res = await fetch(`${BASE_URL}/orders/${id}`);
+  async getOrder(id: string, token?: string): Promise<Order> {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/orders/${id}`, { headers });
     const json: ApiResponse<Order> = await res.json();
     if (!json.success || !json.data) throw new Error(json.error || 'Order not found');
     return json.data;
   },
 
-  async createReservation(payload: any): Promise<Reservation> {
+  async createReservation(payload: any, token?: string): Promise<Reservation> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${BASE_URL}/reservations`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
     const json: ApiResponse<Reservation> = await res.json();
@@ -190,6 +257,48 @@ export const api = {
     });
     const json: ApiResponse<void> = await res.json();
     if (!json.success) throw new Error(json.error || 'Failed to delete menu item');
+  },
+
+  // Category Management (Admin)
+  async addCategory(token: string, cat: { name: string; slug?: string; description?: string }): Promise<Category> {
+    const res = await fetch(`${BASE_URL}/admin/categories`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(cat),
+    });
+    const json: ApiResponse<Category> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to add category');
+    return json.data;
+  },
+
+  async updateCategory(
+    token: string,
+    idOrSlug: string,
+    cat: { name?: string; slug?: string; description?: string }
+  ): Promise<Category> {
+    const res = await fetch(`${BASE_URL}/admin/categories/${idOrSlug}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(cat),
+    });
+    const json: ApiResponse<Category> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to update category');
+    return json.data;
+  },
+
+  async deleteCategory(token: string, idOrSlug: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/admin/categories/${idOrSlug}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<void> = await res.json();
+    if (!json.success) throw new Error(json.error || 'Failed to delete category');
   },
 
   async addPromoBanner(token: string, banner: Partial<PromoBanner>): Promise<PromoBanner> {

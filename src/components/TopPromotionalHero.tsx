@@ -215,29 +215,32 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
       */}
       <div className="relative w-full min-h-[350px] xs:min-h-[370px] sm:min-h-[395px] md:min-h-[430px] flex flex-col justify-between overflow-hidden">
         {/* Sliding Track for promotional banners and deals */}
-        <div
-          className="absolute inset-0 flex w-full h-full transition-transform duration-500 ease-out z-0"
-          style={{
-            transform: `translateX(-${currentSlide * 100}%)`,
-          }}
-        >
-          {/* HIGHWAY PROMOTIONAL COMBOS & DEALS EXTENDING FULL BLEED TO THE TOP AND BOTTOM */}
-          {banners.map((combo) => (
+        {(() => {
+          const safeSlide = totalSlides > 0 ? (currentSlide >= totalSlides ? 0 : currentSlide) : 0;
+          return (
             <div
-              key={combo.id}
-              id={`hero-combo-${combo.id}`}
-              onClick={() => onSelectBanner(combo)}
-              className="w-full h-full shrink-0 relative cursor-pointer overflow-hidden flex flex-col justify-start pb-6 sm:pb-8 px-4 sm:px-10 md:px-16 bg-stone-50 dark:bg-stone-950 group"
-              style={{ paddingTop: `${headerHeight + 28}px` }}
+              className="absolute inset-0 flex w-full h-full transition-transform duration-500 ease-out z-0"
+              style={{
+                transform: `translateX(-${safeSlide * 100}%)`,
+              }}
             >
-              {/* Full-bleed food promotional banner image extending fully to bottom */}
-              <img
-                src={combo.imageUrl}
-                alt={combo.title}
-                className="absolute inset-0 w-full h-full object-cover object-center brightness-[0.82] group-hover:scale-105 transition-transform duration-700"
-              />
+              {/* HIGHWAY PROMOTIONAL COMBOS & DEALS EXTENDING FULL BLEED TO THE TOP AND BOTTOM */}
+              {banners.map((combo) => (
+                <div
+                  key={combo.id}
+                  id={`hero-combo-${combo.id}`}
+                  onClick={() => onSelectBanner(combo)}
+                  className="w-full h-full shrink-0 relative cursor-pointer overflow-hidden flex flex-col justify-start pb-6 sm:pb-8 px-4 sm:px-10 md:px-16 bg-stone-50 dark:bg-stone-950 group"
+                  style={{ paddingTop: `${headerHeight + 28}px` }}
+                >
+                  {/* Full-bleed food promotional banner image extending fully to bottom */}
+                  <img
+                    src={combo.imageUrl}
+                    alt={combo.title}
+                    className="absolute inset-0 w-full h-full object-cover object-center brightness-[0.82] group-hover:scale-105 transition-transform duration-700"
+                  />
 
-              {/* Top scrim: keeps header, logo, search bar & combo title text high-contrast and readable */}
+                  {/* Top scrim: keeps header, logo, search bar & combo title text high-contrast and readable */}
               <div className="absolute inset-x-0 top-0 h-44 sm:h-56 bg-gradient-to-b from-black/75 via-black/40 to-transparent pointer-events-none" />
 
               {/* Bottom slow fade: starts 1 line lower, extending smoothly to the bottom white background */}
@@ -268,6 +271,8 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
             </div>
           ))}
         </div>
+          );
+        })()}
 
         {/* 
           =============================================================

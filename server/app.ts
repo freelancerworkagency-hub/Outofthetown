@@ -1,7 +1,7 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { apiRouter } from './routes.js';
-import { generalApiLimiter } from './middleware/rateLimiter.js';
+import { generalApiLimiter, secondRateLimiter } from './middleware/rateLimiter.js';
 import { sanitizeInputs } from './middleware/sanitize.js';
 
 /**
@@ -34,6 +34,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Anti-XSS and input sanitization
 app.use(sanitizeInputs);
+
+// Limit user requests to 10 per second at most to prevent bombing attacks and server overload
+app.use('/api', secondRateLimiter);
 
 // General rate limiter on API routes to protect against DDoS
 app.use('/api', generalApiLimiter);

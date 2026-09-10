@@ -8,6 +8,7 @@ export const ALL_EXPECTED_TABLES = [
   'promo_banners',
   'cafe_info',
   'invoices',
+  'customers',
 ];
 
 // In-memory cache of active tables detected via Supabase OpenAPI
@@ -811,6 +812,87 @@ export class SupabaseService {
   }
 
   // =====================================
+  // CUSTOMERS (Email + Mobile Verified)
+  // =====================================
+  public static async saveCustomer(customer: {
+    id: string;
+    name: string;
+    phone: string;
+    email: string;
+    createdAt?: string;
+    lastLogin?: string;
+  }): Promise<boolean> {
+    const supabase = getSupabaseClient();
+    if (!supabase) return false;
+
+    const activeTables = await SupabaseService.getActiveTables();
+    if (!activeTables.has('customers')) return false;
+
+    try {
+      const row = {
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        created_at: customer.createdAt || new Date().toISOString(),
+        last_login: customer.lastLogin || new Date().toISOString(),
+      };
+
+      const { error } = await supabase.from('customers').upsert(row, { onConflict: 'phone' });
+      if (error) {
+        if (isTableMissingError(error)) {
+          activeTables.delete('customers');
+          return false;
+        }
+        console.warn('Supabase: saveCustomer error:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      if (!isTableMissingError(err)) {
+        console.warn('Supabase: saveCustomer exception:', err.message);
+      }
+      return false;
+    }
+  }
+
+  public static async fetchCustomers(): Promise<any[] | null> {
+    const supabase = getSupabaseClient();
+    if (!supabase) return null;
+
+    const activeTables = await SupabaseService.getActiveTables();
+    if (!activeTables.has('customers')) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        if (isTableMissingError(error)) {
+          activeTables.delete('customers');
+        }
+        return null;
+      }
+
+      if (data && Array.isArray(data)) {
+        return data.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          phone: r.phone,
+          email: r.email,
+          createdAt: r.created_at,
+          lastLogin: r.last_login,
+        }));
+      }
+      return [];
+    } catch {
+      return null;
+    }
+  }
+
+  // =====================================
   // SYSTEM HYDRATION & PERSISTENCE
   // =====================================
   public static async hydrateStoreFromSupabase(store: any): Promise<boolean> {
@@ -896,6 +978,17 @@ export class SupabaseService {
           for (const resv of store.reservations) {
             await SupabaseService.saveReservation(resv);
           }
+        }
+      }
+
+      // 6. Customers
+      if (activeTables.has('customers')) {
+        const dbCustomers = await SupabaseService.fetchCustomers();
+        if (dbCustomers && dbCustomers.length > 0) {
+          const sbPhones = new Set(dbCustomers.map((c) => c.phone));
+          const localRemaining = (store.customers || []).filter((c: any) => !sbPhones.has(c.phone));
+          store.customers = [...dbCustomers, ...localRemaining];
+          console.log(`[Supabase] Loaded ${dbCustomers.length} customers from database.`);
         }
       }
 

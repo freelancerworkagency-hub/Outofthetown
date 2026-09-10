@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   ShoppingBag,
@@ -13,8 +13,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  ShieldCheck,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext.js';
+import { useAuth } from '../context/AuthContext.js';
 import { api } from '../services/api.js';
 import type { Order, OrderType, PaymentMethod } from '../types.js';
 
@@ -44,6 +46,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
     total,
   } = useCart();
 
+  const { customer, customerToken, isAuthenticated, requireAuth } = useAuth();
+
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
@@ -55,6 +59,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
   const [promoMessage, setPromoMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
+
+  // Sync customer details when authenticated
+  useEffect(() => {
+    if (customer) {
+      if (customer.name) setCustomerName(customer.name);
+      if (customer.phone) setCustomerPhone(customer.phone);
+      if (customer.email) setCustomerEmail(customer.email);
+    }
+  }, [customer]);
 
   if (!isCartOpen) return null;
 
@@ -70,16 +83,19 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
     }
   };
 
-  const handleCheckout = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const executeOrderSubmission = async (overrideName?: string, overridePhone?: string, overrideEmail?: string) => {
     setOrderError(null);
 
-    if (!customerName.trim()) {
+    const effectiveName = (overrideName || customerName || customer?.name || '').trim();
+    const effectivePhone = (overridePhone || customerPhone || customer?.phone || '').trim();
+    const effectiveEmail = (overrideEmail || customerEmail || customer?.email || '').trim();
+
+    if (!effectiveName) {
       setOrderError('Please enter your full name');
       return;
     }
 
-    if (!customerPhone.trim() || customerPhone.replace(/\D/g, '').length < 8) {
+    if (!effectivePhone || effectivePhone.replace(/\D/g, '').length < 8) {
       setOrderError('Please enter a valid phone number for order updates');
       return;
     }
@@ -98,9 +114,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
       setIsSubmitting(true);
 
       const payload = {
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
-        customerEmail: customerEmail.trim() || undefined,
+        customerName: effectiveName,
+        customerPhone: effectivePhone,
+        customerEmail: effectiveEmail || undefined,
         orderType,
         deliveryAddress: orderType === 'delivery' ? deliveryAddress.trim() : undefined,
         tableNumber: orderType === 'dine-in' ? tableNumber.trim() : undefined,
@@ -116,7 +132,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
         paymentMethod,
       };
 
-      const order = await api.createOrder(payload);
+      const order = await api.createOrder(payload, customerToken || undefined);
       clearCart();
       setIsCartOpen(false);
       onOrderSuccess(order);
@@ -125,6 +141,31 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleCheckout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOrderError(null);
+
+    if (orderType === 'delivery' && !deliveryAddress.trim()) {
+      setOrderError('Please provide a complete delivery address');
+      return;
+    }
+
+    if (orderType === 'dine-in' && !tableNumber.trim()) {
+      setOrderError('Please enter your table number');
+      return;
+    }
+
+    // Require customer authentication before placing order
+    if (!isAuthenticated) {
+      requireAuth(() => {
+        executeOrderSubmission();
+      }, 'order');
+      return;
+    }
+
+    await executeOrderSubmission();
   };
 
   return (

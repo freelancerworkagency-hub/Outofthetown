@@ -39,6 +39,25 @@ const commonRateLimitOptions = {
   validate: false,
 };
 
+// 0. Strict 10 Requests Per Second Anti-Bombing Rate Limiter
+// Maximum 10 requests per second per IP to prevent bombing attacks and server overload
+export const secondRateLimiter = rateLimit({
+  ...commonRateLimitOptions,
+  windowMs: 1000, // 1 second window
+  max: 10, // At most 10 requests per second
+  message: {
+    success: false,
+    error: 'Too many requests. Limit is 10 requests per second to prevent bombing attacks and server overload.',
+  },
+  handler: (req: Request, res: Response) => {
+    res.status(429).json({
+      success: false,
+      error: 'Too many requests. Limit is 10 requests per second to prevent bombing attacks and server overload. Please slow down.',
+      retryAfterSeconds: 1,
+    });
+  },
+});
+
 // 1. General API Rate Limiter
 // Max 150 requests per 10 minutes per IP
 export const generalApiLimiter = rateLimit({

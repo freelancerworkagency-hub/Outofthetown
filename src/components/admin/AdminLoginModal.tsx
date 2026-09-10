@@ -35,10 +35,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     }
   };
 
-  const handleQuickDemoFill = () => {
-    setPassword('admin123');
-  };
-
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs">
       <div className="relative w-full max-w-sm rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-6 sm:p-7">
@@ -103,17 +99,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               <span>Unlock Admin Suite</span>
             )}
           </button>
-
-          {/* Demo helper */}
-          <div className="pt-2 text-center">
-            <button
-              type="button"
-              onClick={handleQuickDemoFill}
-              className="text-xs text-amber-600 dark:text-amber-400 hover:underline font-medium"
-            >
-              Demo Auto-Fill (passcode: admin123)
-            </button>
-          </div>
         </form>
       </div>
     </div>

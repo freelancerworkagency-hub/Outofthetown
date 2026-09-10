@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Calendar,
@@ -9,8 +9,10 @@ import {
   AlertCircle,
   Loader2,
   MapPin,
+  ShieldCheck,
 } from 'lucide-react';
 import { api } from '../services/api.js';
+import { useAuth } from '../context/AuthContext.js';
 import type { Reservation, SeatingArea } from '../types.js';
 
 interface ReservationModalProps {
@@ -37,6 +39,8 @@ const SEATING_OPTIONS: { id: SeatingArea; label: string; desc: string; icon: str
 ];
 
 export const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose }) => {
+  const { customer, customerToken, isAuthenticated, requireAuth } = useAuth();
+
   const [date, setDate] = useState(() => {
     const today = new Date();
     today.setDate(today.getDate() + 1);
@@ -54,37 +58,52 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onCl
   const [confirmedReservation, setConfirmedReservation] = useState<Reservation | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Sync customer details when authenticated
+  useEffect(() => {
+    if (customer) {
+      if (customer.name) setCustomerName(customer.name);
+      if (customer.phone) setCustomerPhone(customer.phone);
+      if (customer.email) setCustomerEmail(customer.email);
+    }
+  }, [customer]);
+
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const executeReservation = async () => {
     setErrorMessage(null);
 
-    if (!customerName.trim()) {
+    const effectiveName = (customerName || customer?.name || '').trim();
+    const effectivePhone = (customerPhone || customer?.phone || '').trim();
+    const effectiveEmail = (customerEmail || customer?.email || '').trim();
+
+    if (!effectiveName) {
       setErrorMessage('Please provide your full name');
       return;
     }
-    if (!customerPhone.trim() || customerPhone.replace(/\D/g, '').length < 8) {
+    if (!effectivePhone || effectivePhone.replace(/\D/g, '').length < 8) {
       setErrorMessage('Please provide a valid phone number for SMS confirmation');
       return;
     }
-    if (!customerEmail.trim() || !customerEmail.includes('@')) {
+    if (!effectiveEmail || !effectiveEmail.includes('@')) {
       setErrorMessage('Please provide a valid email address');
       return;
     }
 
     try {
       setIsSubmitting(true);
-      const resv = await api.createReservation({
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
-        customerEmail: customerEmail.trim(),
-        date,
-        time,
-        guestCount,
-        seatingArea,
-        specialRequests: specialRequests.trim() || undefined,
-      });
+      const resv = await api.createReservation(
+        {
+          customerName: effectiveName,
+          customerPhone: effectivePhone,
+          customerEmail: effectiveEmail,
+          date,
+          time,
+          guestCount,
+          seatingArea,
+          specialRequests: specialRequests.trim() || undefined,
+        },
+        customerToken || undefined
+      );
 
       setConfirmedReservation(resv);
     } catch (err: any) {
@@ -92,6 +111,21 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onCl
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    // Prompt OTP login if guest tries to reserve table
+    if (!isAuthenticated) {
+      requireAuth(() => {
+        executeReservation();
+      }, 'reservation');
+      return;
+    }
+
+    await executeReservation();
   };
 
   const resetForm = () => {

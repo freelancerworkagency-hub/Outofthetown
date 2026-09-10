@@ -113,3 +113,12 @@ export interface CafeInfo {
   openingHours: string;
   announcement?: string;
 }
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  createdAt?: string;
+  lastLogin?: string;
+}

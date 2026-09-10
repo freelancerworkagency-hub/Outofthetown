@@ -162,6 +162,19 @@ CREATE TABLE IF NOT EXISTS public.invoices (
 
 CREATE INDEX IF NOT EXISTS idx_invoices_order_id ON public.invoices(order_id);
 
+-- 7. Customers Table (Email + Mobile Verified)
+CREATE TABLE IF NOT EXISTS public.customers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    last_login TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_customers_phone ON public.customers(phone);
+CREATE INDEX IF NOT EXISTS idx_customers_email ON public.customers(email);
+
 -- Row Level Security (RLS) policies
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reservations ENABLE ROW LEVEL SECURITY;
@@ -169,6 +182,7 @@ ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.promo_banners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cafe_info ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read access to Menu, Banners, Cafe Info, Invoices
 CREATE POLICY IF NOT EXISTS "Public read menu items" ON public.menu_items FOR SELECT USING (true);
@@ -187,4 +201,5 @@ CREATE POLICY IF NOT EXISTS "Service role full access orders" ON public.orders U
 CREATE POLICY IF NOT EXISTS "Service role full access reservations" ON public.reservations USING (true) WITH CHECK (true);
 CREATE POLICY IF NOT EXISTS "Service role full access menu" ON public.menu_items USING (true) WITH CHECK (true);
 CREATE POLICY IF NOT EXISTS "Service role full access invoices" ON public.invoices USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "Service role full access customers" ON public.customers USING (true) WITH CHECK (true);
 `;

@@ -46,7 +46,10 @@ interface OrdersManagementProps {
       estimatedTimeMinutes?: number;
     } | string
   ) => Promise<void>;
+  onDeleteOrder?: (orderId: string) => void;
+  onCancelOrder?: (orderId: string, reason?: string) => void;
   onRefresh: () => void;
+  onOpenRevenueAnalysis?: () => void;
   isLoading?: boolean;
   cafeInfo?: CafeInfo | null;
 }
@@ -65,7 +68,10 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
   orders,
   token,
   onUpdateOrderStatus,
+  onDeleteOrder,
+  onCancelOrder,
   onRefresh,
+  onOpenRevenueAnalysis,
   isLoading = false,
   cafeInfo,
 }) => {
@@ -226,35 +232,36 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
     }
   };
 
-  // Submit Cancel Order
+  // Submit Cancel Order - Instant Optimistic Cancellation
   const handleConfirmCancel = async () => {
     if (!cancellingOrder) return;
+    const targetOrder = cancellingOrder;
+    const reason = cancelReason;
+    setCancellingOrder(null);
+    onCancelOrder?.(targetOrder.id, reason);
+    showToast(`Order #${targetOrder.id} cancelled`);
+
     try {
-      setIsSubmittingCancel(true);
-      await api.cancelOrder(token, cancellingOrder.id, cancelReason);
-      await onRefresh();
-      showToast(`Order #${cancellingOrder.id} was successfully cancelled`);
-      setCancellingOrder(null);
+      await api.cancelOrder(token, targetOrder.id, reason);
     } catch (err: any) {
       showToast('Failed to cancel order: ' + err.message);
-    } finally {
-      setIsSubmittingCancel(false);
+      onRefresh();
     }
   };
 
-  // Submit Delete / Remove Order History
+  // Submit Delete / Remove Order History - Instant Optimistic Removal
   const handleConfirmDelete = async () => {
     if (!deletingOrder) return;
+    const targetOrder = deletingOrder;
+    setDeletingOrder(null);
+    onDeleteOrder?.(targetOrder.id);
+    showToast('removed order');
+
     try {
-      setIsSubmittingDelete(true);
-      await api.deleteOrder(token, deletingOrder.id);
-      await onRefresh();
-      showToast(`Order #${deletingOrder.id} permanently removed from history & database`);
-      setDeletingOrder(null);
+      await api.deleteOrder(token, targetOrder.id);
     } catch (err: any) {
       showToast('Failed to delete order record: ' + err.message);
-    } finally {
-      setIsSubmittingDelete(false);
+      onRefresh();
     }
   };
 
@@ -262,13 +269,13 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
   const handleDownloadInvoice = async (order: Order) => {
     try {
       setDownloadingInvoiceId(order.id);
-      // 1. Register invoice into Supabase database
+      // 1. Register invoice into database
       await api.registerInvoice(token, order.id).catch((err) => {
-        console.warn('Supabase invoice registration notice:', err);
+        console.warn('Invoice registration notice:', err);
       });
       // 2. Generate and download PDF
       generateOrderInvoicePdf(order, cafeInfo || undefined);
-      showToast(`Bill/Invoice for Order #${order.id} downloaded & stored in Supabase!`);
+      showToast(`Bill/Invoice for Order #${order.id} downloaded successfully!`);
     } catch (err: any) {
       showToast('Error generating invoice: ' + err.message);
     } finally {
@@ -309,11 +316,11 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
               Orders Management
             </h2>
             <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
-              Supabase Backed ({orders.length})
+              Live Orders ({orders.length})
             </span>
           </div>
           <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1">
-            Search orders by order number, expand to view full breakdown, cancel orders, download PDF bills stored in Supabase, and delete order history records.
+            Search orders by order number, expand to view full breakdown, cancel orders, download PDF bills, and manage order history.
           </p>
         </div>
 
@@ -447,16 +454,25 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
         </div>
 
         {/* Total Sales Volume */}
-        <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 shadow-xs">
+        <div
+          id="kpi-revenue-card"
+          onClick={() => onOpenRevenueAnalysis?.()}
+          className="p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-300/60 dark:border-amber-700/60 shadow-xs cursor-pointer hover:border-amber-500 hover:scale-[1.02] transition-all group"
+          title="Click to view full Revenue & Sales Analysis page"
+        >
           <div className="flex items-center justify-between text-amber-700 dark:text-amber-300 mb-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Revenue</span>
-            <CreditCard className="w-4 h-4 text-amber-600" />
+            <span className="text-[11px] font-bold uppercase tracking-wider">Revenue</span>
+            <div className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 group-hover:underline">
+              <span>Analysis</span>
+              <CreditCard className="w-3.5 h-3.5" />
+            </div>
           </div>
           <p className="text-2xl font-bold font-mono text-amber-600 dark:text-amber-400 truncate">
             ₹{metrics.totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </p>
-          <span className="text-[10px] text-stone-500 font-medium">
-            Active orders total
+          <span className="text-[10px] text-amber-700/80 dark:text-amber-300/80 font-medium flex items-center justify-between">
+            <span>Active orders</span>
+            <span className="font-bold text-amber-600">Open Page →</span>
           </span>
         </div>
       </div>
@@ -1304,7 +1320,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
             </div>
 
             <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
-              Are you sure you want to cancel order <strong>#{cancellingOrder.id}</strong>? The status will be changed to <strong>Cancelled</strong> and synced to the Supabase database.
+              Are you sure you want to cancel order <strong>#{cancellingOrder.id}</strong>? The status will be changed to <strong>Cancelled</strong>.
             </p>
 
             <div className="space-y-1.5">
@@ -1380,10 +1396,10 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
             <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-xs text-rose-900 dark:text-rose-300 space-y-1">
               <p className="font-bold flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 text-rose-600" />
-                <span>Permanent Database Deletion</span>
+                <span>Permanent Order Deletion</span>
               </p>
               <p className="text-[11px] text-rose-700 dark:text-rose-400">
-                This action will permanently wipe order <strong>#{deletingOrder.id}</strong> (Customer: {deletingOrder.customerName}, ₹{deletingOrder.total.toFixed(2)}) from the order history and the Supabase database. This cannot be undone.
+                This action will permanently wipe order <strong>#{deletingOrder.id}</strong> (Customer: {deletingOrder.customerName}, ₹{deletingOrder.total.toFixed(2)}) from the order history. This cannot be undone.
               </p>
             </div>
 
@@ -1466,7 +1482,10 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               {isKotMode ? (
                 /* Kitchen Order Ticket (KOT) Thermal Receipt Preview */
-                <div className="p-6 rounded-2xl bg-stone-50 text-stone-900 font-mono border-2 border-dashed border-stone-300 space-y-4 shadow-inner">
+                <div
+                  id="kot-print-area"
+                  className="p-6 rounded-2xl bg-stone-50 text-stone-900 font-mono border-2 border-dashed border-stone-300 space-y-4 shadow-inner"
+                >
                   <div className="text-center pb-3 border-b border-dashed border-stone-400">
                     <p className="text-xs font-bold uppercase tracking-widest text-stone-600">
                       KITCHEN ORDER TICKET (KOT)

@@ -16,3 +16,35 @@
     @apply transition-colors duration-200 antialiased;
   }
 }
+
+@media print {
+  /* Hide all regular web UI elements */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Exclusively show the KOT thermal ticket */
+  #kot-print-area,
+  #kot-print-area * {
+    visibility: visible !important;
+  }
+
+  #kot-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    margin: 0 !important;
+    padding: 6mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Courier New', Courier, monospace !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

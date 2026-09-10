@@ -25,7 +25,8 @@ export const FlipkartPromoBanner: React.FC<FlipkartPromoBannerProps> = ({
 
   if (!banners.length) return null;
 
-  const current = banners[currentIndex];
+  const safeIndex = currentIndex < banners.length ? currentIndex : 0;
+  const current = banners[safeIndex];
 
   const handleNext = (e: React.MouseEvent) => {
     e.stopPropagation();

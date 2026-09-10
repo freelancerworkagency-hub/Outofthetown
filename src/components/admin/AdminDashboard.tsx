@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Store,
   UtensilsCrossed,
@@ -19,53 +19,127 @@ import {
   Clock,
   MapPin,
   Phone,
-  Database,
+  TrendingUp,
+  FolderEdit,
+  Layers,
+  Bell,
+  Volume2,
+  VolumeX,
+  Printer,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
-import type { MenuItem, PromoBanner, Order, Reservation, CafeInfo, OrderStatus } from '../../types.js';
+import type { MenuItem, PromoBanner, Order, Reservation, CafeInfo, OrderStatus, Category } from '../../types.js';
 import { OrdersManagement } from './OrdersManagement.js';
-import { SupabaseDatabaseTab } from './SupabaseDatabaseTab.js';
+import { RevenueAnalysis } from './RevenueAnalysis.js';
+import { KitchenOrderTicket } from './KitchenOrderTicket.js';
+import { bellSound } from '../../utils/sound.js';
 
 interface AdminDashboardProps {
   token: string;
   onLogout: () => void;
   onClose: () => void;
+  menuItems?: MenuItem[];
+  promoBanners?: PromoBanner[];
+  cafeInfo?: CafeInfo | null;
+  categories?: Category[];
+  onUpdateMenuItems?: (items: MenuItem[]) => void;
+  onUpdatePromoBanners?: (banners: PromoBanner[]) => void;
+  onUpdateCategories?: (cats: Category[]) => void;
   onMenuUpdated?: () => void;
 }
 
-type AdminTab = 'orders' | 'reservations' | 'menu' | 'banners' | 'database' | 'settings';
+type AdminTab = 'orders' | 'reservations' | 'menu' | 'banners' | 'revenue' | 'settings';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   token,
   onLogout,
   onClose,
+  menuItems: initialMenuItems,
+  promoBanners: initialPromoBanners,
+  cafeInfo: initialCafeInfo,
+  categories: initialCategories,
+  onUpdateMenuItems,
+  onUpdatePromoBanners,
+  onUpdateCategories,
   onMenuUpdated,
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('orders');
 
-  // State collections
+  // State collections initialized immediately from props for zero-lag display
   const [orders, setOrders] = useState<Order[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [banners, setBanners] = useState<PromoBanner[]>([]);
-  const [cafeInfo, setCafeInfo] = useState<CafeInfo | null>(null);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(initialMenuItems || []);
+  const [banners, setBanners] = useState<PromoBanner[]>(initialPromoBanners || []);
+  const [cafeInfo, setCafeInfo] = useState<CafeInfo | null>(initialCafeInfo || null);
+  const [categories, setCategories] = useState<Category[]>(
+    initialCategories && initialCategories.length > 0
+      ? initialCategories
+      : [
+          { id: 'cat-all', name: 'All Dishes', slug: 'all', icon: 'Sparkles' },
+          { id: 'cat-thali', name: 'Special Thalis', slug: 'thali', icon: 'UtensilsCrossed' },
+          { id: 'cat-bakery', name: 'Bakery & Cakes', slug: 'bakery', icon: 'Cake' },
+          { id: 'cat-bites', name: 'Bites & Chaat', slug: 'bites', icon: 'Flame' },
+          { id: 'cat-burgers', name: 'Burgers & Wraps', slug: 'burgers', icon: 'Sandwich' },
+          { id: 'cat-italian', name: 'Pizzas & Pastas', slug: 'italian', icon: 'Pizza' },
+          { id: 'cat-mains', name: 'North Indian Mains', slug: 'mains', icon: 'Soup' },
+          { id: 'cat-shakes', name: 'Shakes & Coolers', slug: 'shakes', icon: 'Wine' },
+          { id: 'cat-coffee', name: 'Coffee & Kulhad Chai', slug: 'coffee', icon: 'Coffee' },
+        ]
+  );
+  const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryFormName, setCategoryFormName] = useState('');
+  const [categoryFormSlug, setCategoryFormSlug] = useState('');
+  const [newCatName, setNewCatName] = useState('');
+  const [isCustomCategoryMode, setIsCustomCategoryMode] = useState(false);
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Auto KOT & Bell Sound State
+  const [autoKotOrder, setAutoKotOrder] = useState<Order | null>(null);
+  const [isSoundMuted, setIsSoundMuted] = useState(false);
+  const knownOrderIdsRef = useRef<Set<string>>(new Set());
+  const isInitialOrdersLoadRef = useRef<boolean>(true);
+
+  // Sync with prop updates if available
+  useEffect(() => {
+    if (initialMenuItems && initialMenuItems.length > 0) {
+      setMenuItems(initialMenuItems);
+    }
+  }, [initialMenuItems]);
+
+  useEffect(() => {
+    if (initialPromoBanners && initialPromoBanners.length > 0) {
+      setBanners(initialPromoBanners);
+    }
+  }, [initialPromoBanners]);
+
+  useEffect(() => {
+    if (initialCafeInfo) {
+      setCafeInfo(initialCafeInfo);
+    }
+  }, [initialCafeInfo]);
+
+  useEffect(() => {
+    if (initialCategories && initialCategories.length > 0) {
+      setCategories(initialCategories);
+    }
+  }, [initialCategories]);
 
   // New Menu Item form modal state
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [menuForm, setMenuForm] = useState({
     name: '',
-    category: 'coffee',
+    category: 'thali',
     description: '',
-    price: 6.5,
-    originalPrice: 8.0,
+    price: 180,
+    originalPrice: 220,
     isVeg: true,
     isBestseller: false,
-    image: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=600&q=80',
-    preparationTimeMinutes: 10,
+    image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
+    preparationTimeMinutes: 15,
   });
 
   // New Banner form modal state
@@ -89,18 +163,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const loadAllData = async () => {
     try {
       setIsLoading(true);
-      const [oList, rList, mList, bList, cInfo] = await Promise.all([
+      const [oList, rList, mList, bList, cInfo, catList] = await Promise.all([
         api.getAdminOrders(token),
         api.getAdminReservations(token),
         api.getMenuItems(),
         api.getPromoBanners(),
         api.getCafeInfo(),
+        api.getCategories().catch(() => []),
       ]);
       setOrders(oList);
+      if (isInitialOrdersLoadRef.current && oList && oList.length > 0) {
+        oList.forEach((o) => knownOrderIdsRef.current.add(o.id));
+        isInitialOrdersLoadRef.current = false;
+      }
       setReservations(rList);
       setMenuItems(mList);
       setBanners(bList);
       setCafeInfo(cInfo);
+      if (catList && catList.length > 0) {
+        setCategories(catList);
+      }
     } catch (err: any) {
       showNotification('Failed to sync management data: ' + err.message);
     } finally {
@@ -108,11 +190,157 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  // Category Management Handlers
+  const handleUpdateCategory = async (catId: string, name: string, slug?: string) => {
+    if (!name.trim()) return;
+    const prevCats = categories;
+    const targetCat = categories.find((c) => c.id === catId || c.slug === catId);
+    const oldSlug = targetCat?.slug;
+    const newSlug = (slug || name.toLowerCase().replace(/[^a-z0-9]/g, '-')).trim();
+
+    const updatedCats = categories.map((c) =>
+      c.id === catId || c.slug === catId
+        ? { ...c, name: name.trim(), slug: newSlug }
+        : c
+    );
+    setCategories(updatedCats);
+    onUpdateCategories?.(updatedCats);
+
+    // Also update any menu items mapped to this category locally
+    if (oldSlug && newSlug && oldSlug !== newSlug) {
+      const updatedMenuItems = menuItems.map((item) =>
+        item.category === oldSlug ? { ...item, category: newSlug } : item
+      );
+      setMenuItems(updatedMenuItems);
+      onUpdateMenuItems?.(updatedMenuItems);
+    }
+
+    showNotification(`Category updated to "${name}"`);
+    setEditingCategory(null);
+
+    try {
+      await api.updateCategory(token, catId, { name, slug: newSlug });
+      onMenuUpdated?.();
+    } catch (err: any) {
+      setCategories(prevCats);
+      showNotification('Failed to update category: ' + err.message);
+    }
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCatName.trim()) return;
+    const name = newCatName.trim();
+    const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const tempCat: Category = {
+      id: `cat-${Date.now()}`,
+      name,
+      slug,
+      icon: 'UtensilsCrossed',
+    };
+    const nextCats = [...categories, tempCat];
+    setCategories(nextCats);
+    onUpdateCategories?.(nextCats);
+    setNewCatName('');
+    showNotification(`Category "${name}" added`);
+
+    try {
+      const saved = await api.addCategory(token, { name, slug });
+      setCategories((curr) => curr.map((c) => (c.id === tempCat.id ? saved : c)));
+      onMenuUpdated?.();
+    } catch (err: any) {
+      setCategories(categories);
+      showNotification('Failed to add category: ' + err.message);
+    }
+  };
+
+  const handleDeleteCategory = async (catId: string) => {
+    const prevCats = categories;
+    const nextCats = categories.filter((c) => c.id !== catId && c.slug !== catId);
+    setCategories(nextCats);
+    onUpdateCategories?.(nextCats);
+    showNotification('Category removed');
+
+    try {
+      await api.deleteCategory(token, catId);
+      onMenuUpdated?.();
+    } catch (err: any) {
+      setCategories(prevCats);
+      showNotification('Failed to remove category: ' + err.message);
+    }
+  };
+
   useEffect(() => {
     loadAllData();
   }, [token]);
 
-  // Handle Order status update
+  // Order arrival listener: rings the bell sound exclusively on the admin's device & auto-generates KOT
+  useEffect(() => {
+    // Unlock browser audio context on first administrator interaction
+    const unlockAudio = () => {
+      bellSound.unlock();
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+    window.addEventListener('click', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
+
+    // Poll every 3.5 seconds to detect fresh incoming customer orders
+    const pollInterval = setInterval(async () => {
+      try {
+        const freshOrders = await api.getAdminOrders(token);
+        if (!freshOrders || !Array.isArray(freshOrders)) return;
+
+        // If this is first sync, record existing order IDs to avoid ringing for historical orders
+        if (isInitialOrdersLoadRef.current) {
+          freshOrders.forEach((o) => knownOrderIdsRef.current.add(o.id));
+          isInitialOrdersLoadRef.current = false;
+          setOrders(freshOrders);
+          return;
+        }
+
+        // Detect brand-new pending orders that were placed since last poll
+        const newlyArrived = freshOrders.filter(
+          (o) => !knownOrderIdsRef.current.has(o.id) && o.status === 'pending'
+        );
+
+        // Update known order IDs
+        freshOrders.forEach((o) => knownOrderIdsRef.current.add(o.id));
+        setOrders(freshOrders);
+
+        if (newlyArrived.length > 0) {
+          // Play the order bell sound exclusively on the admin device!
+          if (!isSoundMuted) {
+            bellSound.ringOrderBell();
+          }
+
+          const incomingOrder = newlyArrived[0];
+          showNotification(
+            `🔔 NEW ORDER #${incomingOrder.id.slice(-6).toUpperCase()} RECEIVED! Auto KOT Generated`
+          );
+
+          // Automatically generate KOT and trigger system print dialog
+          setAutoKotOrder(incomingOrder);
+          setTimeout(() => {
+            try {
+              window.print();
+            } catch (printErr) {
+              console.log('Automated print initiated', printErr);
+            }
+          }, 600);
+        }
+      } catch (err) {
+        // Continue polling silently
+      }
+    }, 3500);
+
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+  }, [token, isSoundMuted]);
+
+  // Handle Order status update - INSTANT OPTIMISTIC UPDATE
   const handleUpdateOrderStatus = async (
     orderId: string,
     status: OrderStatus,
@@ -123,93 +351,226 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       estimatedTimeMinutes?: number;
     } | string
   ) => {
+    const prevOrders = orders;
+    const optObj = typeof options === 'object' ? options : {};
+    const updated = orders.map((o) => {
+      if (o.id === orderId) {
+        return {
+          ...o,
+          status,
+          ...(optObj.acceptedBy ? { acceptedBy: optObj.acceptedBy } : {}),
+          ...(optObj.acceptedAt ? { acceptedAt: optObj.acceptedAt } : {}),
+          ...(optObj.estimatedTimeMinutes ? { estimatedTimeMinutes: optObj.estimatedTimeMinutes } : {}),
+          ...(optObj.notes ? { specialInstructions: (o.specialInstructions ? o.specialInstructions + ' | ' : '') + optObj.notes } : {}),
+        };
+      }
+      return o;
+    });
+    setOrders(updated);
+    const staffInfo = typeof options === 'object' && options?.acceptedBy ? ` by ${options.acceptedBy}` : '';
+    showNotification(`Order ${orderId} marked as ${status}${staffInfo}`);
+
     try {
-      const updated = await api.updateOrderStatus(token, orderId, status, options);
-      setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)));
-      const staffInfo = typeof options === 'object' && options?.acceptedBy ? ` by ${options.acceptedBy}` : '';
-      showNotification(`Order ${orderId} marked as ${status}${staffInfo}`);
+      const serverUpdated = await api.updateOrderStatus(token, orderId, status, options);
+      setOrders((curr) => curr.map((o) => (o.id === orderId ? serverUpdated : o)));
     } catch (err: any) {
-      showNotification(err.message);
+      setOrders(prevOrders);
+      showNotification('Failed to update order status: ' + err.message);
     }
   };
 
-  // Handle Reservation status update
+  const handleDeleteOrder = (orderId: string) => {
+    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+  };
+
+  const handleCancelOrder = (orderId: string, reason?: string) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              status: 'cancelled' as OrderStatus,
+              specialInstructions: (o.specialInstructions ? o.specialInstructions + ' | ' : '') + `Cancelled: ${reason || 'Customer request'}`,
+            }
+          : o
+      )
+    );
+  };
+
+  // Handle Reservation status update - INSTANT OPTIMISTIC UPDATE
   const handleUpdateReservationStatus = async (resvId: string, status: string) => {
+    const prevReservations = reservations;
+    const updated = reservations.map((r) => (r.id === resvId ? { ...r, status: status as any } : r));
+    setReservations(updated);
+    showNotification(`Reservation ${resvId} updated to ${status}`);
+
     try {
-      const updated = await api.updateReservationStatus(token, resvId, status);
-      setReservations((prev) => prev.map((r) => (r.id === resvId ? updated : r)));
-      showNotification(`Reservation ${resvId} updated to ${status}`);
+      const serverUpdated = await api.updateReservationStatus(token, resvId, status);
+      setReservations((curr) => curr.map((r) => (r.id === resvId ? serverUpdated : r)));
     } catch (err: any) {
-      showNotification(err.message);
+      setReservations(prevReservations);
+      showNotification('Failed to update reservation: ' + err.message);
     }
   };
 
-  // Save / Edit Menu item
+  // Save / Edit Menu item - INSTANT ADDITION & EDIT
   const handleSaveMenuItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      if (editingItem) {
-        const updated = await api.updateMenuItem(token, editingItem.id, menuForm);
-        setMenuItems((prev) => prev.map((m) => (m.id === editingItem.id ? updated : m)));
-        showNotification('Dish updated successfully');
-      } else {
-        const created = await api.addMenuItem(token, menuForm);
-        setMenuItems((prev) => [created, ...prev]);
-        showNotification('New dish added to digital menu');
-      }
+    if (editingItem) {
+      const prevItems = menuItems;
+      const updated: MenuItem = {
+        ...editingItem,
+        name: menuForm.name,
+        category: menuForm.category,
+        description: menuForm.description,
+        price: Number(menuForm.price),
+        originalPrice: menuForm.originalPrice ? Number(menuForm.originalPrice) : undefined,
+        isVeg: menuForm.isVeg,
+        isBestseller: menuForm.isBestseller,
+        image: menuForm.image,
+        preparationTimeMinutes: Number(menuForm.preparationTimeMinutes) || 15,
+      };
+      const nextItems = prevItems.map((m) => (m.id === editingItem.id ? updated : m));
+      // INSTANT UI UPDATE
+      setMenuItems(nextItems);
+      onUpdateMenuItems?.(nextItems);
       setIsAddMenuOpen(false);
       setEditingItem(null);
-      onMenuUpdated?.();
-    } catch (err: any) {
-      showNotification(err.message);
+      showNotification('Dish updated successfully');
+
+      try {
+        const saved = await api.updateMenuItem(token, editingItem.id, menuForm);
+        setMenuItems((curr) => curr.map((m) => (m.id === saved.id ? saved : m)));
+        onUpdateMenuItems?.(nextItems.map((m) => (m.id === saved.id ? saved : m)));
+      } catch (err: any) {
+        setMenuItems(prevItems);
+        onUpdateMenuItems?.(prevItems);
+        showNotification('Failed to update dish: ' + err.message);
+      }
+    } else {
+      const tempId = 'dish_' + Date.now();
+      const newItem: MenuItem = {
+        id: tempId,
+        name: menuForm.name,
+        category: menuForm.category,
+        description: menuForm.description,
+        price: Number(menuForm.price),
+        originalPrice: menuForm.originalPrice ? Number(menuForm.originalPrice) : undefined,
+        isVeg: menuForm.isVeg,
+        isBestseller: menuForm.isBestseller,
+        isAvailable: true,
+        image: menuForm.image,
+        rating: 4.8,
+        reviewsCount: 1,
+        preparationTimeMinutes: Number(menuForm.preparationTimeMinutes) || 15,
+        tags: [menuForm.category, menuForm.isVeg ? 'Veg' : 'Non-Veg'],
+      };
+      const prevItems = menuItems;
+      const nextItems = [newItem, ...prevItems];
+      // INSTANT UI UPDATE
+      setMenuItems(nextItems);
+      onUpdateMenuItems?.(nextItems);
+      setIsAddMenuOpen(false);
+      showNotification('New dish added to digital menu');
+
+      try {
+        const created = await api.addMenuItem(token, menuForm);
+        setMenuItems((curr) => curr.map((m) => (m.id === tempId ? created : m)));
+        onUpdateMenuItems?.(nextItems.map((m) => (m.id === tempId ? created : m)));
+      } catch (err: any) {
+        setMenuItems(prevItems);
+        onUpdateMenuItems?.(prevItems);
+        showNotification('Failed to add dish: ' + err.message);
+      }
     }
   };
 
-  // Toggle item availability
+  // Toggle item availability - INSTANT OPTIMISTIC UPDATE
   const handleToggleAvailability = async (item: MenuItem) => {
+    const prevItems = menuItems;
+    const updated: MenuItem = { ...item, isAvailable: !item.isAvailable };
+    const nextItems = prevItems.map((m) => (m.id === item.id ? updated : m));
+    setMenuItems(nextItems);
+    onUpdateMenuItems?.(nextItems);
+    showNotification(`${item.name} marked ${!item.isAvailable ? 'Available' : 'Sold Out'}`);
+
     try {
-      const updated = await api.updateMenuItem(token, item.id, { isAvailable: !item.isAvailable });
-      setMenuItems((prev) => prev.map((m) => (m.id === item.id ? updated : m)));
-      showNotification(`${item.name} marked ${!item.isAvailable ? 'Available' : 'Sold Out'}`);
-      onMenuUpdated?.();
+      await api.updateMenuItem(token, item.id, { isAvailable: !item.isAvailable });
     } catch (err: any) {
-      showNotification(err.message);
+      setMenuItems(prevItems);
+      onUpdateMenuItems?.(prevItems);
+      showNotification('Failed to toggle availability: ' + err.message);
     }
   };
 
-  // Delete Menu item
+  // Delete Menu item - INSTANT OPTIMISTIC REMOVAL
   const handleDeleteMenuItem = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this menu item?')) return;
+    const prevItems = menuItems;
+    const nextItems = prevItems.filter((m) => m.id !== id);
+    // INSTANT: disappears immediately
+    setMenuItems(nextItems);
+    onUpdateMenuItems?.(nextItems);
+    showNotification('Menu item deleted');
+
     try {
       await api.deleteMenuItem(token, id);
-      setMenuItems((prev) => prev.filter((m) => m.id !== id));
-      showNotification('Menu item deleted');
-      onMenuUpdated?.();
     } catch (err: any) {
-      showNotification(err.message);
+      setMenuItems(prevItems);
+      onUpdateMenuItems?.(prevItems);
+      showNotification('Failed to delete menu item: ' + err.message);
     }
   };
 
-  // Save Banner
+  // Save Banner - INSTANT OPTIMISTIC ADDITION
   const handleSaveBanner = async (e: React.FormEvent) => {
     e.preventDefault();
+    const tempId = 'banner_' + Date.now();
+    const newBanner: PromoBanner = {
+      id: tempId,
+      title: bannerForm.title,
+      subtitle: bannerForm.subtitle,
+      highlightBadge: bannerForm.highlightBadge,
+      discountText: bannerForm.discountText,
+      code: bannerForm.code,
+      imageUrl: bannerForm.imageUrl,
+      badgeBgColor: bannerForm.badgeBgColor,
+      targetCategory: bannerForm.targetCategory,
+      active: true,
+    };
+    const prevBanners = banners;
+    const nextBanners = [newBanner, ...prevBanners];
+    // INSTANT: appears immediately
+    setBanners(nextBanners);
+    onUpdatePromoBanners?.(nextBanners);
+    setIsAddBannerOpen(false);
+    showNotification('New promotional banner created');
+
     try {
       const created = await api.addPromoBanner(token, bannerForm);
-      setBanners((prev) => [created, ...prev]);
-      setIsAddBannerOpen(false);
-      showNotification('New promotional banner created');
+      setBanners((curr) => curr.map((b) => (b.id === tempId ? created : b)));
+      onUpdatePromoBanners?.(nextBanners.map((b) => (b.id === tempId ? created : b)));
     } catch (err: any) {
-      showNotification(err.message);
+      setBanners(prevBanners);
+      onUpdatePromoBanners?.(prevBanners);
+      showNotification('Failed to add banner: ' + err.message);
     }
   };
 
+  // Delete Banner - INSTANT OPTIMISTIC REMOVAL
   const handleDeleteBanner = async (id: string) => {
+    const prevBanners = banners;
+    const nextBanners = prevBanners.filter((b) => b.id !== id);
+    // INSTANT: disappears immediately
+    setBanners(nextBanners);
+    onUpdatePromoBanners?.(nextBanners);
+    showNotification('Banner removed');
+
     try {
       await api.deletePromoBanner(token, id);
-      setBanners((prev) => prev.filter((b) => b.id !== id));
-      showNotification('Banner removed');
     } catch (err: any) {
-      showNotification(err.message);
+      setBanners(prevBanners);
+      onUpdatePromoBanners?.(prevBanners);
+      showNotification('Failed to remove banner: ' + err.message);
     }
   };
 
@@ -237,10 +598,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Bell sound test button */}
+          <button
+            type="button"
+            onClick={() => {
+              bellSound.unlock();
+              bellSound.ringOrderBell();
+              showNotification('🔔 Ding-Ding! Order bell sound tested successfully');
+            }}
+            title="Test Kitchen Order Bell Sound"
+            className="px-2.5 py-1.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 hover:bg-amber-100 text-xs font-semibold rounded-xl border border-amber-200 dark:border-amber-800 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+          >
+            <Bell className="w-3.5 h-3.5 text-amber-600 fill-amber-500 animate-pulse" />
+            <span className="hidden md:inline">Test Bell</span>
+          </button>
+
+          {/* Sound Mute/Unmute toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsSoundMuted(!isSoundMuted);
+              showNotification(isSoundMuted ? 'Order Bell Sound Unmuted' : 'Order Bell Sound Muted');
+            }}
+            title={isSoundMuted ? 'Unmute Order Bell Sound' : 'Mute Order Bell Sound'}
+            className={`p-2 rounded-xl border text-xs font-semibold flex items-center justify-center cursor-pointer transition-colors ${
+              isSoundMuted
+                ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/40 dark:border-rose-900'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800'
+            }`}
+          >
+            {isSoundMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+          </button>
+
           <button
             onClick={loadAllData}
             title="Refresh database records"
-            className="p-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 rounded-xl border border-stone-200 dark:border-stone-700"
+            className="p-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 rounded-xl border border-stone-200 dark:border-stone-700 cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
@@ -338,16 +731,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('database')}
+            onClick={() => setActiveTab('revenue')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 cursor-pointer ${
-              activeTab === 'database'
-                ? 'bg-emerald-700 text-white shadow-xs'
+              activeTab === 'revenue'
+                ? 'bg-amber-600 text-white shadow-xs'
                 : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
             }`}
           >
-            <Database className="w-4 h-4 text-emerald-500" />
-            <span>Supabase Database</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <TrendingUp className="w-4 h-4" />
+            <span>Revenue Analysis</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 text-white font-mono">
+              Live
+            </span>
           </button>
         </div>
       </div>
@@ -362,9 +757,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             orders={orders}
             token={token}
             onUpdateOrderStatus={handleUpdateOrderStatus}
+            onDeleteOrder={handleDeleteOrder}
+            onCancelOrder={handleCancelOrder}
             onRefresh={loadAllData}
             isLoading={isLoading}
             cafeInfo={cafeInfo}
+            onOpenRevenueAnalysis={() => setActiveTab('revenue')}
           />
         )}
 
@@ -474,27 +872,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </p>
               </div>
 
-              <button
-                onClick={() => {
-                  setEditingItem(null);
-                  setMenuForm({
-                    name: '',
-                    category: 'coffee',
-                    description: '',
-                    price: 6.5,
-                    originalPrice: 8.0,
-                    isVeg: true,
-                    isBestseller: false,
-                    image: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=600&q=80',
-                    preparationTimeMinutes: 10,
-                  });
-                  setIsAddMenuOpen(true);
-                }}
-                className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Food Item</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  id="admin-manage-categories-btn"
+                  onClick={() => setIsManageCategoriesOpen(true)}
+                  className="px-3.5 py-2.5 bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-bold rounded-xl border border-stone-300 dark:border-stone-700 shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                  title="Edit existing food categories or create new categories"
+                >
+                  <FolderEdit className="w-4 h-4 text-amber-600" />
+                  <span>Edit Categories ({categories.filter((c) => c.slug !== 'all').length})</span>
+                </button>
+
+                <button
+                  id="admin-add-food-item-btn"
+                  onClick={() => {
+                    setEditingItem(null);
+                    setIsCustomCategoryMode(false);
+                    setMenuForm({
+                      name: '',
+                      category: categories.find((c) => c.slug !== 'all')?.slug || 'thali',
+                      description: '',
+                      price: 180,
+                      originalPrice: 220,
+                      isVeg: true,
+                      isBestseller: false,
+                      image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
+                      preparationTimeMinutes: 15,
+                    });
+                    setIsAddMenuOpen(true);
+                  }}
+                  className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Food Item</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -651,12 +1063,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
 
         {/* ============================================================== */}
-        {/* TAB 5: SUPABASE POSTGRESQL DATABASE */}
+        {/* TAB 5: REVENUE & SALES COMPREHENSIVE ANALYSIS */}
         {/* ============================================================== */}
-        {activeTab === 'database' && (
-          <SupabaseDatabaseTab
+        {activeTab === 'revenue' && (
+          <RevenueAnalysis
+            orders={orders}
+            onBack={() => setActiveTab('orders')}
             token={token}
-            onNotification={showNotification}
           />
         )}
       </div>
@@ -689,24 +1102,81 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold mb-1">Category *</label>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold">Category *</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomCategoryMode(!isCustomCategoryMode)}
+                      className="text-[11px] font-bold text-amber-600 hover:text-amber-700 underline cursor-pointer"
+                    >
+                      {isCustomCategoryMode ? '← Choose from list' : '✏️ Custom / Edit Category'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsManageCategoriesOpen(true)}
+                      className="text-[11px] font-bold text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 underline cursor-pointer"
+                    >
+                      Manage All Categories
+                    </button>
+                  </div>
+                </div>
+
+                {isCustomCategoryMode ? (
+                  <div className="space-y-1.5">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter category name or slug (e.g. Continental, Desserts, Chinese)"
+                      value={menuForm.category}
+                      onChange={(e) => setMenuForm({ ...menuForm, category: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-400 dark:border-amber-600 text-stone-900 dark:text-stone-100 font-semibold"
+                    />
+                    <div className="flex flex-wrap gap-1">
+                      {categories
+                        .filter((c) => c.slug !== 'all')
+                        .map((c) => (
+                          <button
+                            key={c.id || c.slug}
+                            type="button"
+                            onClick={() => setMenuForm({ ...menuForm, category: c.slug || c.name.toLowerCase() })}
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                              menuForm.category === (c.slug || c.name.toLowerCase())
+                                ? 'bg-amber-600 text-white'
+                                : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200'
+                            }`}
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                ) : (
                   <select
                     value={menuForm.category}
-                    onChange={(e) => setMenuForm({ ...menuForm, category: e.target.value })}
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') {
+                        setIsCustomCategoryMode(true);
+                      } else {
+                        setMenuForm({ ...menuForm, category: e.target.value });
+                      }
+                    }}
                     className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700"
                   >
-                    <option value="thali">Special Thalis</option>
-                    <option value="bakery">Bakery & Patisserie</option>
-                    <option value="bites">Bite Up & Chaat</option>
-                    <option value="burgers">Burgers & Wraps</option>
-                    <option value="italian">Pizzas & Pastas</option>
-                    <option value="mains">North Indian Mains</option>
-                    <option value="shakes">Shakes & Coolers</option>
-                    <option value="coffee">Coffee & Kulhad Chai</option>
+                    {categories
+                      .filter((c) => c.slug !== 'all')
+                      .map((c) => (
+                        <option key={c.id || c.slug} value={c.slug || c.name.toLowerCase()}>
+                          {c.name}
+                        </option>
+                      ))}
+                    <option value="__custom__">✏️ + Custom / Enter New Category...</option>
                   </select>
-                </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold mb-1">Price (₹) *</label>
                   <input
@@ -715,6 +1185,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     required
                     value={menuForm.price}
                     onChange={(e) => setMenuForm({ ...menuForm, price: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Original Price (₹)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={menuForm.originalPrice || ''}
+                    onChange={(e) => setMenuForm({ ...menuForm, originalPrice: parseFloat(e.target.value) || 0 })}
+                    placeholder="Optional for discount"
                     className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700"
                   />
                 </div>
@@ -858,6 +1339,201 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* MODAL: MANAGE & EDIT FOOD CATEGORIES */}
+      {isManageCategoriesOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 p-6 shadow-2xl overflow-hidden">
+            <div className="flex justify-between items-center mb-3">
+              <div>
+                <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100 font-serif flex items-center gap-2">
+                  <FolderEdit className="w-5 h-5 text-amber-600" />
+                  <span>Food Categories Management</span>
+                </h3>
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  Edit or rename existing categories, adjust slugs, or add new food categories.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsManageCategoriesOpen(false);
+                  setEditingCategory(null);
+                }}
+                className="p-1.5 rounded-full text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Add New Category Bar */}
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 mb-4">
+              <label className="block text-xs font-bold text-amber-900 dark:text-amber-200 mb-1.5">
+                Add New Food Category
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. South Indian, Mocktails, Desserts"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCategory();
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 text-xs rounded-xl bg-white dark:bg-stone-900 border border-amber-300 dark:border-amber-700 text-stone-900 dark:text-stone-100 font-medium focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCategory}
+                  disabled={!newCatName.trim()}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Category</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Categories List */}
+            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 text-xs">
+              {categories
+                .filter((c) => c.slug !== 'all')
+                .map((cat) => {
+                  const dishCount = menuItems.filter(
+                    (m) => m.category === cat.slug || m.category.toLowerCase() === cat.name.toLowerCase()
+                  ).length;
+                  const isEditingThis = editingCategory?.id === cat.id;
+
+                  return (
+                    <div
+                      key={cat.id || cat.slug}
+                      className="p-3.5 rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-850/60 flex flex-col gap-2"
+                    >
+                      {isEditingThis ? (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[11px] font-bold text-stone-600 dark:text-stone-400 mb-0.5">
+                                Category Name
+                              </label>
+                              <input
+                                type="text"
+                                value={categoryFormName}
+                                onChange={(e) => setCategoryFormName(e.target.value)}
+                                className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 font-semibold text-stone-900 dark:text-stone-100"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold text-stone-600 dark:text-stone-400 mb-0.5">
+                                Slug identifier
+                              </label>
+                              <input
+                                type="text"
+                                value={categoryFormSlug}
+                                onChange={(e) => setCategoryFormSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-'))}
+                                className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 font-mono text-stone-700 dark:text-stone-300"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-end gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setEditingCategory(null)}
+                              className="px-3 py-1 text-xs font-bold text-stone-600 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200 cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateCategory(cat.id, categoryFormName, categoryFormSlug)}
+                              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Save Changes</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-sm shrink-0">
+                              {cat.name.charAt(0)}
+                            </span>
+                            <div className="min-w-0">
+                              <h4 className="font-bold text-stone-900 dark:text-stone-100 text-sm truncate">
+                                {cat.name}
+                              </h4>
+                              <div className="flex items-center gap-2 text-[11px] text-stone-500 dark:text-stone-400">
+                                <span className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1.5 py-0.5 rounded-md">
+                                  {cat.slug}
+                                </span>
+                                <span>•</span>
+                                <span>{dishCount} {dishCount === 1 ? 'dish' : 'dishes'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingCategory(cat);
+                                setCategoryFormName(cat.name);
+                                setCategoryFormSlug(cat.slug);
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-stone-200/70 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Edit</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Remove category "${cat.name}"?`)) {
+                                  handleDeleteCategory(cat.id);
+                                }
+                              }}
+                              className="p-1.5 rounded-xl text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer transition-colors"
+                              title="Delete Category"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-stone-200 dark:border-stone-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsManageCategoriesOpen(false);
+                  setEditingCategory(null);
+                }}
+                className="px-5 py-2 rounded-xl bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 font-bold text-xs cursor-pointer hover:opacity-90"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Automatically Generated Kitchen Order Ticket (KOT) on incoming order */}
+      {autoKotOrder && (
+        <KitchenOrderTicket
+          order={autoKotOrder}
+          cafeInfo={cafeInfo}
+          isAutoGenerated={true}
+          onClose={() => setAutoKotOrder(null)}
+        />
       )}
     </div>
   );

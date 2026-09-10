@@ -216,7 +216,7 @@ export class CafeStore {
       isAvailable: true,
       rating: 4.7,
       reviewsCount: 195,
-      image: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=600&q=80',
+      image: 'https://images.unsplash.com/photo-1610057099431-d73a1c9d2f2f?auto=format&fit=crop&w=600&q=80',
       tags: ['Quick Lunch', 'Pocket Friendly'],
       preparationTimeMinutes: 15,
     },
@@ -311,7 +311,7 @@ export class CafeStore {
       isAvailable: true,
       rating: 4.9,
       reviewsCount: 340,
-      image: 'https://images.unsplash.com/photo-1593560708920-61dd98c46a4e?auto=format&fit=crop&w=600&q=80',
+      image: 'https://images.unsplash.com/photo-1668236543090-82eba5ee5976?auto=format&fit=crop&w=600&q=80',
       tags: ['Traditional Sweet', 'Hot Dessert'],
       preparationTimeMinutes: 3,
     },
@@ -374,7 +374,7 @@ export class CafeStore {
       isAvailable: true,
       rating: 4.7,
       reviewsCount: 165,
-      image: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=600&q=80',
+      image: 'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?auto=format&fit=crop&w=600&q=80',
       tags: ['Healthy Snack', 'Spinach & Peas'],
       preparationTimeMinutes: 14,
     },
@@ -483,7 +483,7 @@ export class CafeStore {
       isAvailable: true,
       rating: 4.6,
       reviewsCount: 130,
-      image: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80',
+      image: 'https://images.unsplash.com/photo-1509722747041-616f39b57569?auto=format&fit=crop&w=600&q=80',
       tags: ['Mexican Spiced', 'Light Meal'],
       preparationTimeMinutes: 12,
     },
@@ -498,7 +498,7 @@ export class CafeStore {
       isAvailable: true,
       rating: 4.8,
       reviewsCount: 320,
-      image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=600&q=80',
+      image: 'https://images.unsplash.com/photo-1528736235302-52922df5c122?auto=format&fit=crop&w=600&q=80',
       tags: ['Classic Toastie', 'Cheesy'],
       preparationTimeMinutes: 12,
     },
@@ -579,7 +579,7 @@ export class CafeStore {
       isAvailable: true,
       rating: 4.9,
       reviewsCount: 410,
-      image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
+      image: 'https://images.unsplash.com/photo-1546833998-877b37c2e5c6?auto=format&fit=crop&w=600&q=80',
       tags: ['Slow Cooked', 'Authentic Tadka'],
       preparationTimeMinutes: 14,
     },
@@ -594,7 +594,7 @@ export class CafeStore {
       isAvailable: true,
       rating: 4.8,
       reviewsCount: 520,
-      image: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=600&q=80',
+      image: 'https://images.unsplash.com/photo-1626074353765-517a681e40be?auto=format&fit=crop&w=600&q=80',
       tags: ['Clay Oven', 'Fresh Tandoor'],
       preparationTimeMinutes: 8,
     },
@@ -658,7 +658,7 @@ export class CafeStore {
       isAvailable: true,
       rating: 4.9,
       reviewsCount: 350,
-      image: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=600&q=80',
+      image: 'https://images.unsplash.com/photo-1571006682875-a82f3efc2250?auto=format&fit=crop&w=600&q=80',
       tags: ['Clay Pot', 'Malai Topped'],
       preparationTimeMinutes: 4,
     },
@@ -969,6 +969,41 @@ export class CafeStore {
       createdAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
     },
   ];
+
+  public customers: {
+    id: string;
+    name: string;
+    phone: string;
+    email: string;
+    createdAt: string;
+    lastLogin?: string;
+  }[] = [
+    {
+      id: 'CUST-1001',
+      name: 'Satyam Kumar',
+      phone: '9828919626',
+      email: 'kumarsatyam5868@gmail.com',
+      createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      lastLogin: new Date().toISOString(),
+    },
+  ];
+
+  public pendingOtps: Map<string, {
+    otp: string;
+    email: string;
+    phone: string;
+    name?: string;
+    expiresAt: number;
+  }> = new Map();
+
+  public customerTokens: Map<string, {
+    id: string;
+    name: string;
+    phone: string;
+    email: string;
+    createdAt: string;
+    lastLogin?: string;
+  }> = new Map();
 
   public static getInstance(): CafeStore {
     if (!CafeStore.instance) {

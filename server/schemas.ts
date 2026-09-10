@@ -25,6 +25,20 @@ export const AdminLoginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+// Customer Authentication Schemas (Email + Mobile OTP)
+export const CustomerSendOtpSchema = z.object({
+  email: z.string().trim().email('Valid email address is required'),
+  phone: z.string().trim().regex(/^[0-9+\s-]{8,15}$/, 'Valid mobile number is required'),
+  name: z.string().trim().min(2).max(60).optional(),
+});
+
+export const CustomerVerifyOtpSchema = z.object({
+  email: z.string().trim().email('Valid email address is required'),
+  phone: z.string().trim().regex(/^[0-9+\s-]{8,15}$/, 'Valid mobile number is required'),
+  otp: z.string().trim().length(6, 'OTP must be 6 digits'),
+  name: z.string().trim().min(2).max(60).optional(),
+});
+
 // ==========================================
 // 2. Menu Item Schema
 // ==========================================
