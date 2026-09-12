@@ -175,17 +175,33 @@ CREATE TABLE IF NOT EXISTS public.customers (
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON public.customers(phone);
 CREATE INDEX IF NOT EXISTS idx_customers_email ON public.customers(email);
 
+-- 8. Food Categories Table
+CREATE TABLE IF NOT EXISTS public.categories (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    icon TEXT DEFAULT 'Sparkles',
+    description TEXT,
+    image TEXT,
+    display_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_categories_slug ON public.categories(slug);
+
 -- Row Level Security (RLS) policies
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reservations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.promo_banners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cafe_info ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 
--- Allow public read access to Menu, Banners, Cafe Info, Invoices
+-- Allow public read access to Menu, Categories, Banners, Cafe Info, Invoices
 CREATE POLICY IF NOT EXISTS "Public read menu items" ON public.menu_items FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "Public read categories" ON public.categories FOR SELECT USING (true);
 CREATE POLICY IF NOT EXISTS "Public read promo banners" ON public.promo_banners FOR SELECT USING (true);
 CREATE POLICY IF NOT EXISTS "Public read cafe info" ON public.cafe_info FOR SELECT USING (true);
 CREATE POLICY IF NOT EXISTS "Public read invoices" ON public.invoices FOR SELECT USING (true);
@@ -200,6 +216,7 @@ CREATE POLICY IF NOT EXISTS "Public read reservations" ON public.reservations FO
 CREATE POLICY IF NOT EXISTS "Service role full access orders" ON public.orders USING (true) WITH CHECK (true);
 CREATE POLICY IF NOT EXISTS "Service role full access reservations" ON public.reservations USING (true) WITH CHECK (true);
 CREATE POLICY IF NOT EXISTS "Service role full access menu" ON public.menu_items USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "Service role full access categories" ON public.categories USING (true) WITH CHECK (true);
 CREATE POLICY IF NOT EXISTS "Service role full access invoices" ON public.invoices USING (true) WITH CHECK (true);
 CREATE POLICY IF NOT EXISTS "Service role full access customers" ON public.customers USING (true) WITH CHECK (true);
 `;

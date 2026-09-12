@@ -16,9 +16,9 @@ import {
   ShieldCheck,
   MapPin,
   LocateFixed,
-  ExternalLink,
   User,
   Phone,
+  LogOut,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -51,7 +51,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
     total,
   } = useCart();
 
-  const { customer, customerToken, isAuthenticated, requireAuth } = useAuth();
+  const { customer, customerToken, isAuthenticated, requireAuth, logout } = useAuth();
 
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -67,7 +67,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
 
   // Google Maps Auto-fetch state
   const [isLocatingAddress, setIsLocatingAddress] = useState(false);
-  const [locationSuccess, setLocationSuccess] = useState<string | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -105,7 +104,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
   // Auto-fetch customer address via Google Maps / Geolocation
   const handleAutoFetchAddress = () => {
     setLocationError(null);
-    setLocationSuccess(null);
 
     if (typeof window === 'undefined' || !navigator.geolocation) {
       setLocationError('Geolocation is not supported by your browser. Please enter your address manually.');
@@ -123,11 +121,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
           const res = await api.reverseGeocodeLocation(lat, lng);
           if (res && res.formattedAddress) {
             setDeliveryAddress(res.formattedAddress);
-            setLocationSuccess(
-              res.source === 'google'
-                ? 'Address auto-fetched via Google Maps! You can add apartment/flat details below.'
-                : 'Address auto-fetched via GPS! You can add apartment/flat details below.'
-            );
             // Clear address error
             setFieldErrors((prev) => ({ ...prev, address: undefined }));
             setOrderError(null);
@@ -484,6 +477,30 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
                 </div>
 
                 <div className="space-y-2.5">
+                  {isAuthenticated && customer && (
+                    <div className="p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/40 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="text-stone-700 dark:text-stone-300 truncate">
+                          Signed in as <strong className="text-stone-900 dark:text-stone-100 font-bold">{customer.name}</strong>
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        id="cart-customer-sign-out-btn"
+                        onClick={() => {
+                          logout();
+                          setCustomerName('');
+                          setCustomerPhone('');
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:underline shrink-0 ml-2 cursor-pointer"
+                      >
+                        <LogOut className="w-3 h-3" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  )}
+
                   {/* Full Name Field */}
                   <div>
                     <div className="flex justify-between items-center mb-1">
@@ -598,27 +615,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
                           <LocateFixed className="w-4 h-4 group-hover:rotate-45 transition-transform" />
                         </div>
                       </button>
-
-                      {/* Location detection success or notice */}
-                      {locationSuccess && (
-                        <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-400/80 text-emerald-800 dark:text-emerald-300 text-[11px] flex items-start gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-600" />
-                          <div className="flex-1">
-                            <span>{locationSuccess}</span>
-                            {coords && (
-                              <a
-                                href={`https://www.google.com/maps?q=${coords.lat},${coords.lng}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-0.5 ml-1.5 text-emerald-700 dark:text-emerald-300 underline font-semibold hover:text-emerald-900"
-                              >
-                                <span>View Map</span>
-                                <ExternalLink className="w-2.5 h-2.5" />
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      )}
 
                       {locationError && (
                         <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-400 text-amber-800 dark:text-amber-300 text-[11px] flex items-start gap-1.5">

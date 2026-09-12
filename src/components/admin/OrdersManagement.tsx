@@ -28,6 +28,7 @@ import {
   User,
   Hash,
   Database,
+  Cake,
 } from 'lucide-react';
 import type { Order, OrderStatus, OrderType, CafeInfo } from '../../types.js';
 import { api } from '../../services/api.js';
@@ -81,8 +82,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
-
   // Expand / Collapse State (Default: all orders collapsed)
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(new Set());
 
@@ -153,6 +152,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
     const readyCount = orders.filter((o) => o.status === 'ready').length;
     const deliveredCount = orders.filter((o) => o.status === 'delivered').length;
     const cancelledCount = orders.filter((o) => o.status === 'cancelled').length;
+    const customCakeCount = orders.filter((o) => o.isCustomCake || o.customCakeDetails).length;
     const totalRevenue = orders
       .filter((o) => o.status !== 'cancelled')
       .reduce((sum, o) => sum + o.total, 0);
@@ -164,6 +164,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
       readyCount,
       deliveredCount,
       cancelledCount,
+      customCakeCount,
       totalRevenue,
     };
   }, [orders]);
@@ -173,7 +174,9 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
     return orders.filter((order) => {
       // Status filter
       if (statusFilter !== 'all') {
-        if (statusFilter === 'in-kitchen') {
+        if (statusFilter === 'custom-cakes') {
+          if (!order.isCustomCake && !order.customCakeDetails) return false;
+        } else if (statusFilter === 'in-kitchen') {
           if (order.status !== 'accepted' && order.status !== 'preparing') return false;
         } else if (order.status !== statusFilter) {
           return false;
@@ -368,29 +371,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
-
-          <div className="flex items-center rounded-xl bg-stone-200 dark:bg-stone-800 p-1 border border-stone-300 dark:border-stone-700">
-            <button
-              onClick={() => setViewMode('cards')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                viewMode === 'cards'
-                  ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-xs'
-                  : 'text-stone-600 dark:text-stone-400'
-              }`}
-            >
-              Compact Cards
-            </button>
-            <button
-              onClick={() => setViewMode('table')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                viewMode === 'table'
-                  ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-xs'
-                  : 'text-stone-600 dark:text-stone-400'
-              }`}
-            >
-              List View
-            </button>
-          </div>
         </div>
       </div>
 
@@ -562,13 +542,14 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
 
         {/* Status Filter Chips & Type Selector */}
         <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-stone-100 dark:border-stone-800">
-          <div className="flex items-center gap-1 overflow-x-auto pb-1">
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1">
             <span className="text-xs text-stone-400 flex items-center gap-1 mr-1">
               <Filter className="w-3.5 h-3.5" />
               <span>Status:</span>
             </span>
             {[
               { id: 'all', label: 'All Orders' },
+              { id: 'custom-cakes', label: '🎂 Custom Cakes', count: metrics.customCakeCount },
               { id: 'pending', label: 'Pending', count: metrics.pendingCount },
               { id: 'accepted', label: 'Accepted' },
               { id: 'preparing', label: 'Preparing' },
@@ -648,9 +629,9 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
             </button>
           )}
         </div>
-      ) : viewMode === 'cards' ? (
+      ) : (
         /* ============================================================== */
-        /* COMPACT / EXPANDABLE CARDS VIEW */
+        /* COMPACT CARDS VIEW (DEFAULT) */
         /* ============================================================== */
         <div className="space-y-3">
           {filteredOrders.map((ord) => {
@@ -724,7 +705,14 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                   </div>
 
                   {/* Right side: Status Pill & Expand Trigger */}
-                  <div className="flex items-center gap-3 self-end sm:self-center">
+                  <div className="flex items-center gap-2 sm:gap-3 self-end sm:self-center flex-wrap justify-end">
+                    {(ord.isCustomCake || ord.customCakeDetails) && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 ring-1 ring-rose-400/50 flex items-center gap-1">
+                        <Cake className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                        <span>Custom Cake</span>
+                      </span>
+                    )}
+
                     {/* Status Pill */}
                     <span
                       className={`text-[11px] uppercase font-bold px-2.5 py-1 rounded-full shrink-0 flex items-center gap-1 ${
@@ -868,6 +856,105 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                         </button>
                       </div>
                     ) : null}
+
+                    {/* Dedicated Made-to-Order Cake Specification Box */}
+                    {(ord.isCustomCake || ord.customCakeDetails) && (
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-rose-500/10 via-amber-500/10 to-transparent border-2 border-rose-300 dark:border-rose-800 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs">
+                              <Cake className="w-4 h-4" />
+                            </span>
+                            <div>
+                              <span className="text-[10px] uppercase font-extrabold tracking-wider text-rose-600 dark:text-rose-400">
+                                Made-to-Order Custom Bakery
+                              </span>
+                              <h5 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                                {ord.customCakeDetails?.occasion || 'Celebration Cake'}
+                              </h5>
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-200 dark:bg-rose-900/60 text-rose-900 dark:text-rose-200">
+                            Custom Pre-Order
+                          </span>
+                        </div>
+
+                        {/* Reference Image & Specs Grid */}
+                        <div className="flex flex-col sm:flex-row gap-3 bg-white/80 dark:bg-stone-850 p-3.5 rounded-xl border border-rose-200/60 dark:border-rose-900/40">
+                          {ord.customCakeDetails?.referenceImageUrl && (
+                            <div className="shrink-0 flex flex-col items-center gap-1.5">
+                              <img
+                                src={ord.customCakeDetails.referenceImageUrl}
+                                alt="Cake reference photo"
+                                referrerPolicy="no-referrer"
+                                className="w-28 h-28 sm:w-32 sm:h-32 rounded-xl object-cover border border-stone-300 dark:border-stone-700 shadow-sm"
+                              />
+                              <a
+                                href={ord.customCakeDetails.referenceImageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold hover:underline"
+                              >
+                                View Full Image
+                              </a>
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0 text-xs space-y-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-stone-700 dark:text-stone-300">
+                              <div>
+                                <span className="text-[10px] text-stone-400 block uppercase font-bold">Weight &amp; Flavor</span>
+                                <span className="font-bold text-stone-900 dark:text-stone-100">
+                                  {ord.customCakeDetails?.weightKg || 1} kg • {ord.customCakeDetails?.flavor}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-stone-400 block uppercase font-bold">Dietary &amp; Shape</span>
+                                <span className="font-bold text-stone-900 dark:text-stone-100">
+                                  {ord.customCakeDetails?.isEggless ? '100% Eggless' : 'Contains Egg'} • {ord.customCakeDetails?.shape || 'Round'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-stone-400 block uppercase font-bold">Target Date &amp; Slot</span>
+                                <span className="font-bold text-amber-700 dark:text-amber-400">
+                                  {ord.customCakeDetails?.targetDate || 'Not specified'} ({ord.customCakeDetails?.targetTime || 'Evening'})
+                                </span>
+                              </div>
+                            </div>
+
+                            {ord.customCakeDetails?.messageOnCake && (
+                              <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200/50 dark:border-rose-900/30 text-rose-900 dark:text-rose-200">
+                                <span className="font-bold text-[10px] uppercase block text-rose-700 dark:text-rose-400">Piped Message On Cake:</span>
+                                <span className="font-semibold text-xs italic">"{ord.customCakeDetails.messageOnCake}"</span>
+                              </div>
+                            )}
+
+                            {ord.customCakeDetails?.designDescription && (
+                              <div className="p-2 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200">
+                                <span className="font-bold text-[10px] uppercase block text-stone-500">Design Instructions:</span>
+                                <span className="text-xs">{ord.customCakeDetails.designDescription}</span>
+                              </div>
+                            )}
+
+                            {ord.customCakeDetails?.specialInstructions && (
+                              <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                                <strong>Bakery Notes:</strong> {ord.customCakeDetails.specialInstructions}
+                              </p>
+                            )}
+
+                            <div className="pt-1 flex items-center gap-2">
+                              <a
+                                href={`https://wa.me/91${ord.customerPhone.replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-2xs"
+                              >
+                                <span>WhatsApp Customer (+91 {ord.customerPhone})</span>
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Ordered Items Breakdown */}
                     <div className="bg-white dark:bg-stone-850 p-4 rounded-xl border border-stone-200 dark:border-stone-800 space-y-3">
@@ -1048,141 +1135,6 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
               </div>
             );
           })}
-        </div>
-      ) : (
-        /* ============================================================== */
-        /* TABLE / LIST VIEW */
-        /* ============================================================== */
-        <div className="overflow-hidden rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-stone-50 dark:bg-stone-850 text-stone-500 dark:text-stone-400 uppercase tracking-wider font-semibold border-b border-stone-200 dark:border-stone-800">
-                <tr>
-                  <th className="p-4">Order Number</th>
-                  <th className="p-4">Date & Time</th>
-                  <th className="p-4">Customer Name</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-200 dark:divide-stone-800">
-                {filteredOrders.map((ord) => {
-                  const isExpanded = expandedOrderIds.has(ord.id);
-                  return (
-                    <React.Fragment key={ord.id}>
-                      <tr
-                        onClick={() => toggleExpandOrder(ord.id)}
-                        className={`hover:bg-stone-50/70 dark:hover:bg-stone-800/40 transition-colors cursor-pointer ${
-                          isExpanded ? 'bg-amber-50/20 dark:bg-amber-950/20' : ''
-                        }`}
-                      >
-                        <td className="p-4 font-mono font-bold text-sm text-stone-900 dark:text-stone-100">
-                          #{ord.id}
-                        </td>
-                        <td className="p-4 font-mono text-stone-500">
-                          {new Date(ord.createdAt).toLocaleDateString([], {
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                          ,{' '}
-                          {new Date(ord.createdAt).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </td>
-                        <td className="p-4 font-bold text-stone-900 dark:text-stone-100">
-                          {ord.customerName}
-                        </td>
-                        <td className="p-4">
-                          <span
-                            className={`text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full ${
-                              ord.status === 'pending'
-                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                                : ord.status === 'accepted'
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                : ord.status === 'preparing'
-                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                                : ord.status === 'ready'
-                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
-                                : ord.status === 'delivered'
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                            }`}
-                          >
-                            {ord.status}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleExpandOrder(ord.id);
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-700 dark:text-stone-300 text-xs font-semibold cursor-pointer inline-flex items-center gap-1"
-                          >
-                            <span>{isExpanded ? 'Hide' : 'Expand'}</span>
-                            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                          </button>
-                        </td>
-                      </tr>
-
-                      {/* Expanded Row in Table Mode */}
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={5} className="p-4 bg-stone-50 dark:bg-stone-850/60 border-b border-stone-200 dark:border-stone-800">
-                            <div className="space-y-3 text-xs">
-                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 dark:border-stone-700 pb-2">
-                                <div className="flex items-center gap-3">
-                                  <span>Phone: <strong>{ord.customerPhone}</strong></span>
-                                  <span>Type: <strong className="uppercase">{ord.orderType}</strong></span>
-                                  <span>Total: <strong className="font-mono text-amber-600">₹{ord.total.toFixed(2)}</strong></span>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => handleDownloadInvoice(ord)}
-                                    className="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-bold cursor-pointer flex items-center gap-1"
-                                  >
-                                    <Download className="w-3 h-3" />
-                                    <span>Download Bill (PDF)</span>
-                                  </button>
-                                  {ord.status !== 'cancelled' && (
-                                    <button
-                                      onClick={() => setCancellingOrder(ord)}
-                                      className="px-2 py-1 rounded-lg bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 font-semibold cursor-pointer"
-                                    >
-                                      Cancel
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => setDeletingOrder(ord)}
-                                    className="px-2 py-1 rounded-lg bg-stone-200 dark:bg-stone-700 hover:text-rose-600 text-stone-600 dark:text-stone-300 font-semibold cursor-pointer"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div>
-                                <p className="font-semibold text-stone-500 mb-1">Items ({ord.items.length}):</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {ord.items.map((it, idx) => (
-                                    <span key={idx} className="px-2 py-1 rounded-md bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 font-mono">
-                                      {it.quantity}x {it.name} (₹{it.price})
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
         </div>
       )}
 
@@ -1580,7 +1532,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
               </div>
             </div>
 
-            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto no-scrollbar">
               {isKotMode ? (
                 /* Kitchen Order Ticket (KOT) Thermal Receipt Preview */
                 <div

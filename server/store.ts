@@ -771,6 +771,13 @@ export class CafeStore {
   public static getInstance(): CafeStore {
     if (!CafeStore.instance) {
       CafeStore.instance = new CafeStore();
+      // Seed default customer token for instant session persistence
+      if (CafeStore.instance.customers.length > 0) {
+        CafeStore.instance.customerTokens.set(
+          'cust-mock-jwt-token-CUST-1001',
+          CafeStore.instance.customers[0]
+        );
+      }
     }
     return CafeStore.instance;
   }

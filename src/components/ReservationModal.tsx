@@ -10,6 +10,7 @@ import {
   Loader2,
   MapPin,
   ShieldCheck,
+  LogOut,
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -37,7 +38,7 @@ const SEATING_OPTIONS: { id: SeatingArea; label: string; desc: string; icon: str
 ];
 
 export const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose }) => {
-  const { customer, customerToken, isAuthenticated, requireAuth } = useAuth();
+  const { customer, customerToken, isAuthenticated, requireAuth, logout } = useAuth();
 
   const [date, setDate] = useState(() => {
     const today = new Date();
@@ -314,9 +315,27 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onCl
 
             {/* Guest Contact Information */}
             <div className="space-y-3 pt-2">
-              <label className="block text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider">
-                Guest Contact Details
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider">
+                  Guest Contact Details
+                </label>
+                {isAuthenticated && customer && (
+                  <button
+                    type="button"
+                    id="reservation-customer-sign-out-btn"
+                    onClick={() => {
+                      logout();
+                      setCustomerName('');
+                      setCustomerPhone('');
+                      setCustomerEmail('');
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                  >
+                    <LogOut className="w-3 h-3" />
+                    <span>Sign Out ({customer.name})</span>
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="text"

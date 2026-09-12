@@ -26,12 +26,14 @@ import {
   Volume2,
   VolumeX,
   Printer,
+  Database,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import type { MenuItem, PromoBanner, Order, Reservation, CafeInfo, OrderStatus, Category } from '../../types.js';
 import { OrdersManagement } from './OrdersManagement.js';
 import { RevenueAnalysis } from './RevenueAnalysis.js';
 import { KitchenOrderTicket } from './KitchenOrderTicket.js';
+import { CategoryManagementView } from './CategoryManagementView.js';
 import { bellSound } from '../../utils/sound.js';
 
 interface AdminDashboardProps {
@@ -48,7 +50,7 @@ interface AdminDashboardProps {
   onMenuUpdated?: () => void;
 }
 
-type AdminTab = 'orders' | 'reservations' | 'menu' | 'banners' | 'revenue' | 'settings';
+type AdminTab = 'orders' | 'reservations' | 'menu' | 'categories' | 'banners' | 'revenue' | 'settings';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   token,
@@ -126,6 +128,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setCategories(initialCategories);
     }
   }, [initialCategories]);
+
+  // Supabase 10-Minute Auto-Sync status
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // New Menu Item form modal state
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
@@ -331,6 +337,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     };
   }, [token, isSoundMuted]);
 
+  // 10-Minute Automatic Cloud Sync with Supabase & comprehensive data refresh
+  useEffect(() => {
+    const TEN_MINUTES_MS = 10 * 60 * 1000;
+    const autoSyncTimer = setInterval(async () => {
+      try {
+        setIsSyncing(true);
+        console.log('[Admin Dashboard] Executing 10-minute automatic cloud sync with Supabase...');
+        await api.syncSupabaseAll(token).catch((err) => {
+          console.warn('[Admin Dashboard] Auto-sync warning:', err.message);
+        });
+        await loadAllData();
+        setLastSyncTime(new Date());
+      } catch (err: any) {
+        console.warn('[Admin Dashboard] 10-minute auto-sync failed:', err);
+      } finally {
+        setIsSyncing(false);
+      }
+    }, TEN_MINUTES_MS);
+
+    return () => clearInterval(autoSyncTimer);
+  }, [token]);
+
   // Handle Order status update - INSTANT OPTIMISTIC UPDATE
   const handleUpdateOrderStatus = async (
     orderId: string,
@@ -406,6 +434,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } catch (err: any) {
       setReservations(prevReservations);
       showNotification('Failed to update reservation: ' + err.message);
+    }
+  };
+
+  // Quick toggle bestseller tag on dish
+  const handleToggleBestseller = async (item: MenuItem) => {
+    const nextBestseller = !item.isBestseller;
+    const prevItems = menuItems;
+    const nextItems = menuItems.map((m) =>
+      m.id === item.id ? { ...m, isBestseller: nextBestseller } : m
+    );
+    setMenuItems(nextItems);
+    onUpdateMenuItems?.(nextItems);
+    showNotification(
+      nextBestseller
+        ? `⭐ "${item.name}" marked as Bestseller!`
+        : `"${item.name}" removed from Bestsellers`
+    );
+
+    try {
+      await api.updateMenuItem(token, item.id, { isBestseller: nextBestseller });
+      onMenuUpdated?.();
+    } catch (err: any) {
+      setMenuItems(prevItems);
+      onUpdateMenuItems?.(prevItems);
+      showNotification('Failed to update bestseller tag: ' + err.message);
     }
   };
 
@@ -571,7 +624,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col">
+    <div
+      id="admin-management-portal"
+      data-admin-portal="true"
+      className="fixed inset-0 z-50 overflow-y-auto no-scrollbar admin-portal-scroll bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col overscroll-contain"
+    >
       {/* Top Header Bar */}
       <header className="sticky top-0 z-20 bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-3">
@@ -626,6 +683,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {isSoundMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
 
+          {/* Cloud Auto-Sync badge */}
+          <div
+            title={`Automatic Cloud Sync: Continuously syncs data with Supabase every 10 minutes. Last synced: ${lastSyncTime.toLocaleTimeString()}`}
+            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold border border-emerald-200 dark:border-emerald-800"
+          >
+            <Database className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-amber-500' : 'text-emerald-500'}`} />
+            <span>Auto-Sync (10m)</span>
+          </div>
+
           <button
             onClick={loadAllData}
             title="Refresh database records"
@@ -662,7 +728,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Navigation Tabs Bar */}
       <div className="bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 px-4 sm:px-8">
-        <div className="flex items-center gap-1 sm:gap-3 overflow-x-auto py-2.5">
+        <div className="flex items-center gap-1 sm:gap-3 overflow-x-auto no-scrollbar py-2.5">
           <button
             onClick={() => setActiveTab('orders')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 cursor-pointer ${
@@ -708,6 +774,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span>Menu Dishes</span>
             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 text-white font-mono">
               {menuItems.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('categories')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 cursor-pointer ${
+              activeTab === 'categories'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>Food Categories</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 text-white font-mono">
+              {categories.filter((c) => c.slug !== 'all').length}
             </span>
           </button>
 
@@ -872,7 +953,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   id="admin-manage-categories-btn"
-                  onClick={() => setIsManageCategoriesOpen(true)}
+                  onClick={() => setActiveTab('categories')}
                   className="px-3.5 py-2.5 bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-bold rounded-xl border border-stone-300 dark:border-stone-700 shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
                   title="Edit existing food categories or create new categories"
                 >
@@ -917,7 +998,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                   <div className="flex-1 min-w-0 flex flex-col justify-between">
                     <div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span
                           className={`w-3 h-3 rounded-xs border flex items-center justify-center shrink-0 ${
                             item.isVeg ? 'border-emerald-600' : 'border-rose-600'
@@ -932,6 +1013,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <h4 className="text-xs font-bold text-stone-900 dark:text-stone-100 truncate">
                           {item.name}
                         </h4>
+                        {item.isBestseller && (
+                          <span className="px-1.5 py-0.2 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold text-[9px] flex items-center gap-0.5">
+                            <Sparkles className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                            <span>BESTSELLER</span>
+                          </span>
+                        )}
                       </div>
                       <p className="text-[11px] text-stone-500 font-mono mt-0.5">
                         ₹{item.price}{' '}
@@ -947,16 +1034,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t border-stone-100 dark:border-stone-800">
-                      <button
-                        onClick={() => handleToggleAvailability(item)}
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md cursor-pointer ${
-                          item.isAvailable
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                            : 'bg-stone-200 text-stone-600 dark:bg-stone-800 dark:text-stone-400'
-                        }`}
-                      >
-                        {item.isAvailable ? 'In Stock' : 'Out of Stock'}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleToggleAvailability(item)}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md cursor-pointer ${
+                            item.isAvailable
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                              : 'bg-stone-200 text-stone-600 dark:bg-stone-800 dark:text-stone-400'
+                          }`}
+                        >
+                          {item.isAvailable ? 'In Stock' : 'Out of Stock'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBestseller(item)}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md cursor-pointer transition-colors flex items-center gap-1 ${
+                            item.isBestseller
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                              : 'bg-stone-100 text-stone-500 hover:text-amber-700 dark:bg-stone-800 dark:text-stone-400'
+                          }`}
+                          title={item.isBestseller ? 'Remove Bestseller tag' : 'Add Bestseller tag'}
+                        >
+                          <Sparkles className={`w-3 h-3 ${item.isBestseller ? 'fill-amber-500 text-amber-500' : ''}`} />
+                          <span>{item.isBestseller ? 'Bestseller' : '+ Bestseller'}</span>
+                        </button>
+                      </div>
 
                       <div className="flex items-center gap-1">
                         <button
@@ -992,6 +1095,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               ))}
             </div>
           </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB: FOOD CATEGORIES MANAGEMENT */}
+        {/* ============================================================== */}
+        {activeTab === 'categories' && (
+          <CategoryManagementView
+            categories={categories}
+            menuItems={menuItems}
+            token={token}
+            onUpdateCategories={onUpdateCategories}
+            onUpdateMenuItems={onUpdateMenuItems}
+            onMenuUpdated={onMenuUpdated}
+            showNotification={showNotification}
+          />
         )}
 
         {/* ============================================================== */}
@@ -1220,24 +1338,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 />
               </div>
 
+              {/* Bestseller & Highlight Tags Section */}
+              <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <div>
+                      <p className="font-bold text-stone-900 dark:text-stone-100 text-xs">
+                        Bestseller Dish Tag
+                      </p>
+                      <p className="text-[10px] text-stone-500 dark:text-stone-400">
+                        Shows ⭐ Bestseller badge and boosts visibility on customer storefront
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={menuForm.isBestseller}
+                      onChange={(e) => setMenuForm({ ...menuForm, isBestseller: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-stone-200 peer-focus:outline-hidden rounded-full peer dark:bg-stone-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-stone-600 peer-checked:bg-amber-600"></div>
+                  </label>
+                </div>
+
+                {menuForm.isBestseller && (
+                  <div className="flex items-center gap-1.5 pt-1 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                    <span className="px-2 py-0.5 rounded-md bg-amber-500 text-white text-[10px] uppercase tracking-wider font-extrabold shadow-2xs flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 fill-white text-white" />
+                      <span>⭐ BESTSELLER PREVIEW</span>
+                    </span>
+                    <span>Featured with golden badge in menu and filters!</span>
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center gap-4 pt-1">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold">
                   <input
                     type="checkbox"
                     checked={menuForm.isVeg}
                     onChange={(e) => setMenuForm({ ...menuForm, isVeg: e.target.checked })}
-                    className="rounded-sm"
+                    className="rounded-sm text-emerald-600 focus:ring-emerald-500"
                   />
-                  <span>Vegetarian</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={menuForm.isBestseller}
-                    onChange={(e) => setMenuForm({ ...menuForm, isBestseller: e.target.checked })}
-                    className="rounded-sm"
-                  />
-                  <span>Mark Bestseller</span>
+                  <span>Pure Vegetarian</span>
                 </label>
               </div>
 
@@ -1395,7 +1540,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             {/* Categories List */}
-            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 text-xs">
+            <div className="flex-1 overflow-y-auto no-scrollbar space-y-2.5 pr-1 text-xs">
               {categories
                 .filter((c) => c.slug !== 'all')
                 .map((cat) => {

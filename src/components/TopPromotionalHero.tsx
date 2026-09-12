@@ -22,9 +22,13 @@ import {
   UtensilsCrossed,
   Flame,
   MapPin,
+  LogOut,
+  LogIn,
+  Cake,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext.js';
 import { useCart } from '../context/CartContext.js';
+import { useAuth } from '../context/AuthContext.js';
 import type { PromoBanner } from '../types.js';
 
 interface TopPromotionalHeroProps {
@@ -35,6 +39,7 @@ interface TopPromotionalHeroProps {
   onOpenReservation: () => void;
   onOpenAdmin: () => void;
   onOpenProfileMenu?: () => void;
+  onOpenCustomCake?: () => void;
   banners: PromoBanner[];
   onSelectBanner: (banner: PromoBanner) => void;
   onSelectCategory?: (category: string) => void;
@@ -49,12 +54,14 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
   onOpenReservation,
   onOpenAdmin,
   onOpenProfileMenu,
+  onOpenCustomCake,
   banners,
   onSelectBanner,
   showOverlayHeader = true,
 }) => {
   const { isDark, toggleTheme } = useTheme();
   const { totalItemsCount, total, setIsCartOpen, applyPromo, appliedPromo } = useCart();
+  const { customer, isAuthenticated, logout, openAuthModal } = useAuth();
 
   // Unified Promotional Carousel Slide index (Slides 0..N: Highway Combos)
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -354,6 +361,19 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
                   </div>
                 </button>
 
+                {/* Custom Cake / Bakery Pre-Order Request Button */}
+                {onOpenCustomCake && (
+                  <button
+                    id="hero-custom-cake-btn"
+                    onClick={onOpenCustomCake}
+                    className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-rose-600/70 to-amber-600/70 hover:from-rose-600 hover:to-amber-600 text-white font-bold text-xs rounded-full backdrop-blur-md border border-white/30 shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+                    title="Design Made-to-Order Custom Celebration Cake"
+                  >
+                    <Cake className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white shrink-0" />
+                    <span className="hidden sm:inline">Custom Cake</span>
+                  </button>
+                )}
+
                 {/* Cart Button */}
                 <button
                   id="btn-open-cart-hero"
@@ -369,7 +389,7 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
                   )}
                 </button>
 
-                {/* User Profile Avatar "S" (Satyam) - Opens Customer Profile Menu */}
+                {/* User Profile Avatar "S" - Opens Customer Profile Menu */}
                 <button
                   id="btn-profile-avatar"
                   onClick={() => {
@@ -381,8 +401,9 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
                   }}
                   className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-2 border-white/80 shadow-md flex items-center justify-center font-bold text-xs sm:text-sm hover:scale-105 transition-all cursor-pointer shrink-0"
                   aria-label="Customer Profile Menu"
+                  title={isAuthenticated && customer?.name ? `${customer.name} Profile & Menu` : 'Customer Profile Menu'}
                 >
-                  S
+                  {isAuthenticated && customer?.name ? customer.name.charAt(0).toUpperCase() : 'S'}
                 </button>
               </div>
             </div>
@@ -538,16 +559,16 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
               className="bg-white dark:bg-stone-900 rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-stone-200 dark:border-stone-800"
             >
               <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-black flex items-center justify-center text-base">
-                    S
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-black flex items-center justify-center text-base shrink-0 shadow-sm">
+                    {isAuthenticated ? (customer?.name ? customer.name.charAt(0).toUpperCase() : 'C') : 'G'}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-base text-stone-900 dark:text-stone-100">
-                      Satyam Kumar
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-base text-stone-900 dark:text-stone-100 truncate">
+                      {isAuthenticated ? (customer?.name || 'Customer') : 'Guest Visitor'}
                     </h3>
-                    <p className="text-xs text-stone-500 dark:text-stone-400">
-                      kumarsatyam5868@gmail.com
+                    <p className="text-xs text-stone-500 dark:text-stone-400 truncate">
+                      {isAuthenticated ? (customer?.email || `+91 ${customer?.phone}`) : 'Not signed in'}
                     </p>
                   </div>
                 </div>
@@ -560,6 +581,36 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
               </div>
 
               <div className="py-4 space-y-2 text-xs">
+                {isAuthenticated ? (
+                  <button
+                    onClick={() => {
+                      logout();
+                      setShowProfileModal(false);
+                    }}
+                    className="w-full flex items-center justify-between p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-900/50 font-semibold text-rose-700 dark:text-rose-300 transition-all cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <LogOut className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                      <span>Sign Out ({customer?.name})</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-rose-400" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setShowProfileModal(false);
+                      openAuthModal('account');
+                    }}
+                    className="w-full flex items-center justify-between p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 border border-amber-200 dark:border-amber-800 font-semibold text-amber-800 dark:text-amber-300 transition-all cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <LogIn className="w-4 h-4 text-amber-600" />
+                      <span>Sign In with Mobile OTP</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-amber-600" />
+                  </button>
+                )}
+
                 <button
                   onClick={() => {
                     setShowProfileModal(false);

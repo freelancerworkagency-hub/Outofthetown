@@ -18,6 +18,7 @@ import {
   Calendar,
   AlertCircle,
   RefreshCw,
+  Cake,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -29,6 +30,7 @@ export interface CustomerProfileModalProps {
   onClose: () => void;
   onOpenReservation: () => void;
   onOpenAdmin: () => void;
+  onOpenCustomCake?: () => void;
 }
 
 export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
@@ -36,6 +38,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
   onClose,
   onOpenReservation,
   onOpenAdmin,
+  onOpenCustomCake,
 }) => {
   const { isDark, toggleTheme } = useTheme();
   const { customer, customerToken, isAuthenticated, logout, openAuthModal } = useAuth();
@@ -47,32 +50,34 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Load customer's private data (guaranteed isolated)
-  useEffect(() => {
-    if (!isOpen || !isAuthenticated || !customerToken) {
+  const fetchCustomerData = async () => {
+    if (!isOpen || (!isAuthenticated && !customer)) {
       setOrders([]);
       setReservations([]);
       return;
     }
 
-    const fetchCustomerData = async () => {
-      try {
-        setIsLoadingData(true);
-        setLoadError(null);
-        const [userOrders, userResvs] = await Promise.all([
-          api.getMyOrders(customerToken),
-          api.getMyReservations(customerToken),
-        ]);
-        setOrders(userOrders);
-        setReservations(userResvs);
-      } catch (err: any) {
-        setLoadError(err.message || 'Failed to load your personal data');
-      } finally {
-        setIsLoadingData(false);
-      }
-    };
+    try {
+      setIsLoadingData(true);
+      setLoadError(null);
+      const [userOrders, userResvs] = await Promise.all([
+        api.getMyOrders(customerToken || undefined),
+        api.getMyReservations(customerToken || undefined),
+      ]);
+      setOrders(userOrders);
+      setReservations(userResvs);
+    } catch (err: any) {
+      setLoadError(err.message || 'Failed to load your personal data');
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
 
-    fetchCustomerData();
-  }, [isOpen, isAuthenticated, customerToken]);
+  useEffect(() => {
+    if (isOpen && (isAuthenticated || customer)) {
+      fetchCustomerData();
+    }
+  }, [isOpen, isAuthenticated, customerToken, activeTab]);
 
   if (!isOpen) return null;
 
@@ -142,14 +147,40 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
               </div>
             </div>
 
-            <button
-              id="customer-profile-close-btn"
-              onClick={onClose}
-              className="p-2 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer shrink-0"
-              aria-label="Close profile menu"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {isAuthenticated ? (
+                <button
+                  id="header-sign-out-btn"
+                  onClick={() => {
+                    logout();
+                    setActiveTab('menu');
+                  }}
+                  title="Sign out of your customer account"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-xs font-bold transition-all cursor-pointer shadow-2xs hover:scale-102 active:scale-95"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden xs:inline">Sign Out</span>
+                </button>
+              ) : (
+                <button
+                  id="header-sign-in-btn"
+                  onClick={handleOpenLogin}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Sign In</span>
+                </button>
+              )}
+
+              <button
+                id="customer-profile-close-btn"
+                onClick={onClose}
+                className="p-2 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer shrink-0"
+                aria-label="Close profile menu"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Navigation Sub-Tabs when logged in */}
@@ -272,7 +303,37 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                 <ChevronRight className="w-4 h-4 text-amber-600 dark:text-amber-400 group-hover:translate-x-0.5 transition-transform" />
               </button>
 
-              {/* 3. NIGHT MODE / DARK MODE OPTION */}
+              {/* 3. CUSTOM CAKE / CELEBRATION PRE-ORDER */}
+              {onOpenCustomCake && (
+                <button
+                  id="customer-menu-custom-cake-btn"
+                  onClick={() => {
+                    onClose();
+                    onOpenCustomCake();
+                  }}
+                  className="w-full flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-transparent hover:from-rose-500/20 hover:via-amber-500/20 border border-rose-200/80 dark:border-rose-900/50 font-semibold text-stone-900 dark:text-stone-100 transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-rose-500 to-amber-600 text-white flex items-center justify-center shadow-xs">
+                      <Cake className="w-4.5 h-4.5" />
+                    </div>
+                    <div className="text-left">
+                      <div className="font-bold text-sm text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
+                        <span>Custom Cake &amp; Bakery Pre-Order</span>
+                        <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-full bg-rose-500 text-white">
+                          Design Your Own
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-stone-500 dark:text-stone-400">
+                        Upload reference photo, custom flavor, weight &amp; message
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-rose-600 dark:text-rose-400 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              )}
+
+              {/* 4. NIGHT MODE / DARK MODE OPTION */}
               <div className="w-full flex items-center justify-between p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700/80">
                 <div className="flex items-center gap-3">
                   <div
@@ -361,19 +422,35 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                 </span>
               </a>
 
-              {/* Log Out Option if logged in */}
+              {/* Sign Out Card if logged in */}
               {isAuthenticated && (
-                <button
-                  id="customer-logout-btn"
-                  onClick={() => {
-                    logout();
-                    onClose();
-                  }}
-                  className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-bold transition-all cursor-pointer mt-2"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Log Out ({customer?.name})</span>
-                </button>
+                <div className="pt-2">
+                  <div className="p-3.5 rounded-2xl bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/40 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                        <LogOut className="w-4.5 h-4.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-stone-900 dark:text-stone-100 truncate text-xs">
+                          {customer?.name || 'Customer Account'}
+                        </div>
+                        <div className="text-[11px] text-stone-500 dark:text-stone-400 truncate">
+                          {customer?.email || (customer?.phone ? `+91 ${customer.phone}` : 'Signed In')}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      id="customer-logout-btn"
+                      onClick={() => {
+                        logout();
+                        setActiveTab('menu');
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-all shadow-xs cursor-pointer active:scale-95 shrink-0"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -387,9 +464,19 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                   <span className="text-xs">Loading your personal orders...</span>
                 </div>
               ) : loadError ? (
-                <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-rose-600 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4" />
-                  <span>{loadError}</span>
+                <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-rose-600 text-xs flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{loadError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchCustomerData}
+                    className="self-start inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Retry</span>
+                  </button>
                 </div>
               ) : orders.length === 0 ? (
                 <div className="py-12 text-center text-stone-500">
@@ -407,9 +494,17 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div>
-                        <span className="font-mono font-bold text-xs text-stone-900 dark:text-stone-100">
-                          #{ord.id}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-xs text-stone-900 dark:text-stone-100">
+                            #{ord.id}
+                          </span>
+                          {(ord.isCustomCake || ord.customCakeDetails) && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 flex items-center gap-1">
+                              <Cake className="w-2.5 h-2.5" />
+                              <span>Custom Cake</span>
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[10px] text-stone-400 flex items-center gap-1 mt-0.5">
                           <Clock className="w-3 h-3" />
                           <span>{new Date(ord.createdAt).toLocaleDateString()} at {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -419,6 +514,27 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                         {ord.status}
                       </span>
                     </div>
+
+                    {(ord.isCustomCake || ord.customCakeDetails) && ord.customCakeDetails?.referenceImageUrl && (
+                      <div className="mb-2 p-1.5 rounded-xl bg-rose-50/50 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-900/40 flex items-center gap-2">
+                        <img
+                          src={ord.customCakeDetails.referenceImageUrl}
+                          alt="Cake reference"
+                          referrerPolicy="no-referrer"
+                          className="w-10 h-10 rounded-lg object-cover border border-stone-200 shrink-0"
+                        />
+                        <div className="text-[11px] min-w-0">
+                          <p className="font-semibold text-rose-900 dark:text-rose-200 truncate">
+                            {ord.customCakeDetails.occasion} • {ord.customCakeDetails.weightKg}kg {ord.customCakeDetails.flavor}
+                          </p>
+                          {ord.customCakeDetails.targetDate && (
+                            <p className="text-[10px] text-stone-500 dark:text-stone-400">
+                              Event: {ord.customCakeDetails.targetDate} ({ord.customCakeDetails.targetTime})
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Items preview */}
                     <div className="text-xs text-stone-600 dark:text-stone-300 space-y-1 mb-2">

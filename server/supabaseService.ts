@@ -5,6 +5,7 @@ export const ALL_EXPECTED_TABLES = [
   'orders',
   'reservations',
   'menu_items',
+  'categories',
   'promo_banners',
   'cafe_info',
   'invoices',
@@ -87,6 +88,9 @@ export function orderToRow(order: Order) {
 
 // Converts a Supabase row back to Order
 export function rowToOrder(row: any): Order {
+  const parsedItems = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+  const customDetails = parsedItems.find((it: any) => it.customCakeDetails)?.customCakeDetails;
+
   return {
     id: row.id,
     customerName: row.customer_name,
@@ -95,7 +99,7 @@ export function rowToOrder(row: any): Order {
     orderType: row.order_type,
     deliveryAddress: row.delivery_address || undefined,
     tableNumber: row.table_number || undefined,
-    items: typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []),
+    items: parsedItems,
     subtotal: Number(row.subtotal),
     discount: Number(row.discount || 0),
     deliveryFee: Number(row.delivery_fee || 0),
@@ -110,6 +114,8 @@ export function rowToOrder(row: any): Order {
     acceptedAt: row.accepted_at || undefined,
     estimatedTimeMinutes: row.estimated_time_minutes ?? undefined,
     createdAt: row.created_at,
+    isCustomCake: Boolean(customDetails),
+    customCakeDetails: customDetails,
   };
 }
 
@@ -264,7 +270,47 @@ export class SupabaseService {
 
       if (res.ok) {
         const data = (await res.json()) as any;
-        const tables = new Set<string>(Object.keys(data.definitions || {}));
+        const tables = new Set<string>();
+
+        // 1. Check Swagger definitions
+        if (data.definitions && typeof data.definitions === 'object') {
+          Object.keys(data.definitions).forEach((k) => tables.add(k));
+        }
+
+        // 2. Check OpenAPI components.schemas
+        if (data.components?.schemas && typeof data.components.schemas === 'object') {
+          Object.keys(data.components.schemas).forEach((k) => tables.add(k));
+        }
+
+        // 3. Check paths
+        if (data.paths && typeof data.paths === 'object') {
+          Object.keys(data.paths).forEach((p) => {
+            const clean = p.replace(/^\//, '').split('/')[0];
+            if (clean && clean !== 'rpc' && !clean.includes('{')) {
+              tables.add(clean);
+            }
+          });
+        }
+
+        // 4. If introspection list is empty, probe expected tables directly via PostgREST
+        if (tables.size === 0) {
+          const supabase = getSupabaseClient();
+          if (supabase) {
+            await Promise.all(
+              ALL_EXPECTED_TABLES.map(async (tableName) => {
+                try {
+                  const probe = await supabase.from(tableName).select('id').limit(1);
+                  if (!probe.error || probe.error.code !== 'PGRST205') {
+                    tables.add(tableName);
+                  }
+                } catch {
+                  // ignore
+                }
+              })
+            );
+          }
+        }
+
         cachedActiveTables = tables;
         lastTableCheckTime = now;
         return cachedActiveTables;
@@ -714,6 +760,125 @@ export class SupabaseService {
   }
 
   // =====================================
+  // CATEGORIES
+  // =====================================
+  public static async saveCategory(cat: {
+    id?: string;
+    name: string;
+    slug: string;
+    icon?: string;
+    description?: string;
+    image?: string;
+    display_order?: number;
+  }): Promise<boolean> {
+    const supabase = getSupabaseClient();
+    if (!supabase) return false;
+
+    const activeTables = await SupabaseService.getActiveTables();
+    if (!activeTables.has('categories')) return false;
+
+    try {
+      const row = {
+        id: cat.id || `cat-${Date.now()}`,
+        name: cat.name,
+        slug: cat.slug,
+        icon: cat.icon || 'UtensilsCrossed',
+        description: cat.description || null,
+        image: cat.image || null,
+        display_order: cat.display_order || 0,
+      };
+
+      const { error } = await supabase.from('categories').upsert(row, { onConflict: 'slug' });
+      if (error) {
+        if (isTableMissingError(error)) {
+          activeTables.delete('categories');
+          return false;
+        }
+        console.warn('Supabase: saveCategory error:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      if (!isTableMissingError(err)) {
+        console.warn('Supabase: saveCategory exception:', err.message);
+      }
+      return false;
+    }
+  }
+
+  public static async deleteCategory(idOrSlug: string): Promise<boolean> {
+    const supabase = getSupabaseClient();
+    if (!supabase) return false;
+
+    const activeTables = await SupabaseService.getActiveTables();
+    if (!activeTables.has('categories')) return false;
+
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .or(`id.eq.${idOrSlug},slug.eq.${idOrSlug}`);
+      if (error) {
+        if (isTableMissingError(error)) {
+          activeTables.delete('categories');
+          return false;
+        }
+        console.warn('Supabase: deleteCategory error:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      if (!isTableMissingError(err)) {
+        console.warn('Supabase: deleteCategory exception:', err.message);
+      }
+      return false;
+    }
+  }
+
+  public static async fetchCategories(): Promise<any[] | null> {
+    const supabase = getSupabaseClient();
+    if (!supabase) return null;
+
+    const activeTables = await SupabaseService.getActiveTables();
+    if (!activeTables.has('categories')) {
+      return null;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('display_order', { ascending: true });
+
+      if (error) {
+        if (isTableMissingError(error)) {
+          activeTables.delete('categories');
+          return null;
+        }
+        console.warn('Supabase: fetchCategories error:', error.message);
+        return null;
+      }
+
+      if (data && Array.isArray(data)) {
+        return data.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          slug: r.slug,
+          icon: r.icon,
+          description: r.description,
+          image: r.image,
+        }));
+      }
+      return [];
+    } catch (err: any) {
+      if (!isTableMissingError(err)) {
+        console.warn('Supabase: fetchCategories exception:', err.message);
+      }
+      return null;
+    }
+  }
+
+  // =====================================
   // CAFE INFO
   // =====================================
   public static async saveCafeInfo(info: CafeInfo): Promise<boolean> {
@@ -973,6 +1138,19 @@ export class SupabaseService {
         } else if (store.promoBanners && store.promoBanners.length > 0) {
           for (const banner of store.promoBanners) {
             await SupabaseService.saveBanner(banner);
+          }
+        }
+      }
+
+      // 4. Food Categories
+      if (activeTables.has('categories')) {
+        const dbCategories = await SupabaseService.fetchCategories();
+        if (dbCategories && dbCategories.length > 0) {
+          store.categories = dbCategories;
+          console.log(`[Supabase] Loaded ${dbCategories.length} food categories from database.`);
+        } else if (store.categories && store.categories.length > 0) {
+          for (const cat of store.categories) {
+            await SupabaseService.saveCategory(cat);
           }
         }
       }

@@ -46,6 +46,22 @@ export interface OrderItem {
   image: string;
 }
 
+export interface CustomCakeDetails {
+  itemType: string; // 'cake' | 'cupcakes' | 'pastries' | 'hamper' | 'other'
+  occasion: string; // 'Birthday' | 'Anniversary' | 'Wedding' | 'Celebration' | etc.
+  flavor: string;
+  weightKg: number;
+  shape?: string;
+  isEggless: boolean;
+  messageOnCake?: string;
+  designDescription: string;
+  referenceImageUrl?: string;
+  targetDate: string;
+  targetTime: string;
+  specialInstructions?: string;
+  estimatedPriceQuote?: number;
+}
+
 export interface Order {
   id: string;
   customerName: string;
@@ -69,6 +85,9 @@ export interface Order {
   acceptedAt?: string;
   createdAt: string;
   estimatedTimeMinutes?: number;
+  isCustomCake?: boolean;
+  customCakeDetails?: CustomCakeDetails;
+  specialInstructions?: string;
 }
 
 export type SeatingArea = 'indoor_lounge' | 'garden_patio' | 'window_nook' | 'chef_counter';

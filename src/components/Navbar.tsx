@@ -9,8 +9,10 @@ import {
   MicOff,
   ChevronLeft,
   MapPin,
+  Cake,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext.js';
+import { useAuth } from '../context/AuthContext.js';
 import { FilterBar, FilterBarProps } from './FilterBar.js';
 
 export interface NavbarProps extends Omit<FilterBarProps, 'isSticky'> {
@@ -20,6 +22,7 @@ export interface NavbarProps extends Omit<FilterBarProps, 'isSticky'> {
   onOpenReservation?: () => void;
   onOpenAdmin?: () => void;
   onNavigateHome?: () => void;
+  onOpenCustomCake?: () => void;
   isOfferDetailView?: boolean;
   isScrolled?: boolean;
 }
@@ -47,10 +50,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   totalFiltered,
   onOpenProfileMenu,
   onNavigateHome,
+  onOpenCustomCake,
   isOfferDetailView = false,
   isScrolled = false,
 }) => {
   const { totalItemsCount, total, setIsCartOpen } = useCart();
+  const { customer, isAuthenticated } = useAuth();
 
   // Voice Search / Mic state
   const [isListening, setIsListening] = useState(false);
@@ -233,8 +238,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </div>
 
-        {/* Right 2: Action Icons (Cart, Profile) */}
+        {/* Right 2: Action Icons (Custom Cake, Cart, Profile) */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* Custom Cake Pre-Order Trigger */}
+          {onOpenCustomCake && (
+            <button
+              id="navbar-custom-cake-btn"
+              onClick={onOpenCustomCake}
+              className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-gradient-to-r from-rose-500/15 via-amber-500/15 to-rose-500/15 hover:from-rose-500/25 hover:to-amber-500/25 text-rose-700 dark:text-rose-300 border border-rose-300/70 dark:border-rose-800/70 font-bold text-xs shadow-2xs transition-all hover:scale-102 active:scale-95 cursor-pointer shrink-0"
+              title="Request a Made-to-Order Custom Cake with your reference photo"
+            >
+              <Cake className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+              <span className="hidden xs:inline">Custom Cake</span>
+            </button>
+          )}
+
           {/* Cart Trigger Button */}
           <button
             id="navbar-open-cart-btn"
@@ -255,15 +273,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
-          {/* Customer Profile Button (Opens Customer Menu with Book Table, Night Mode, etc.) */}
+          {/* Customer Profile Button (Opens Customer Menu with Book Table, Night Mode, Account Sign Out, etc.) */}
           <button
             id="navbar-customer-profile-btn"
             onClick={onOpenProfileMenu}
-            title="Customer Profile & Menu"
+            title={isAuthenticated && customer?.name ? `${customer.name} - Open Customer Menu` : "Customer Profile & Menu"}
             className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-black text-xs flex items-center justify-center shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0 border border-blue-400/50"
             aria-label="Open Customer Profile Menu"
           >
-            S
+            {isAuthenticated && customer?.name ? customer.name.charAt(0).toUpperCase() : 'S'}
           </button>
         </div>
       </div>

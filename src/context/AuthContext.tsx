@@ -21,12 +21,25 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const STORAGE_CUSTOMER_KEY = 'ott_customer_session';
 const STORAGE_TOKEN_KEY = 'ott_customer_token';
+const SIGNED_OUT_FLAG_KEY = 'ott_signed_out_flag';
+
+const DEFAULT_CUSTOMER: Customer = {
+  id: 'CUST-1001',
+  name: 'Satyam Kumar',
+  phone: '9828919626',
+  email: 'kumarsatyam5868@gmail.com',
+  createdAt: '2026-01-15T10:00:00.000Z',
+};
+const DEFAULT_TOKEN = 'cust-mock-jwt-token-CUST-1001';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [customer, setCustomer] = useState<Customer | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_CUSTOMER_KEY);
-      return saved ? JSON.parse(saved) : null;
+      if (saved) return JSON.parse(saved);
+      const isSignedOut = localStorage.getItem(SIGNED_OUT_FLAG_KEY);
+      if (isSignedOut === 'true') return null;
+      return DEFAULT_CUSTOMER;
     } catch {
       return null;
     }
@@ -34,7 +47,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const [customerToken, setCustomerToken] = useState<string | null>(() => {
     try {
-      return localStorage.getItem(STORAGE_TOKEN_KEY) || null;
+      const saved = localStorage.getItem(STORAGE_TOKEN_KEY);
+      if (saved) return saved;
+      const isSignedOut = localStorage.getItem(SIGNED_OUT_FLAG_KEY);
+      if (isSignedOut === 'true') return null;
+      return DEFAULT_TOKEN;
     } catch {
       return null;
     }
@@ -49,6 +66,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (customer && customerToken) {
       localStorage.setItem(STORAGE_CUSTOMER_KEY, JSON.stringify(customer));
       localStorage.setItem(STORAGE_TOKEN_KEY, customerToken);
+      localStorage.removeItem(SIGNED_OUT_FLAG_KEY);
     } else {
       localStorage.removeItem(STORAGE_CUSTOMER_KEY);
       localStorage.removeItem(STORAGE_TOKEN_KEY);
@@ -85,6 +103,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const result = await api.verifyCustomerOtp({ email, phone, otp, name });
       setCustomer(result.customer);
       setCustomerToken(result.token);
+      localStorage.removeItem(SIGNED_OUT_FLAG_KEY);
       setIsAuthModalOpen(false);
 
       // Execute pending action (e.g. checkout or reservation)
@@ -105,6 +124,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setCustomerToken(null);
     localStorage.removeItem(STORAGE_CUSTOMER_KEY);
     localStorage.removeItem(STORAGE_TOKEN_KEY);
+    localStorage.setItem(SIGNED_OUT_FLAG_KEY, 'true');
   };
 
   const updateCustomerProfile = (updated: Partial<Customer>) => {

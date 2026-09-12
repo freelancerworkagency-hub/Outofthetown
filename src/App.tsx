@@ -17,6 +17,7 @@ import {
   X,
   Star,
   Flame,
+  Cake,
 } from 'lucide-react';
 import { ThemeProvider } from './context/ThemeContext.js';
 import { AuthProvider } from './context/AuthContext.js';
@@ -33,9 +34,11 @@ import { CustomerAuthModal } from './components/CustomerAuthModal.js';
 import { ReservationModal } from './components/ReservationModal.js';
 import { CustomerProfileModal } from './components/CustomerProfileModal.js';
 import { OrderStatusModal } from './components/OrderStatusModal.js';
+import { CustomCakeModal } from './components/CustomCakeModal.js';
 import { AdminLoginModal } from './components/admin/AdminLoginModal.js';
 import { AdminDashboard } from './components/admin/AdminDashboard.js';
 import { LocationSection } from './components/LocationSection.js';
+import { MenuPdfDownloadSection } from './components/MenuPdfDownloadSection.js';
 import { api } from './services/api.js';
 import type { MenuItem, Category, PromoBanner, Order, CafeInfo } from './types.js';
 
@@ -76,6 +79,7 @@ function CafeHome() {
   // Modals
   const [isReservationOpen, setIsReservationOpen] = useState(false);
   const [isCustomerMenuOpen, setIsCustomerMenuOpen] = useState(false);
+  const [isCustomCakeOpen, setIsCustomCakeOpen] = useState(false);
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [adminToken, setAdminToken] = useState<string | null>(() => {
@@ -291,6 +295,7 @@ function CafeHome() {
               onClearAllFilters={handleClearAllFilters}
               totalFiltered={filteredItems.length}
               onOpenProfileMenu={() => setIsCustomerMenuOpen(true)}
+              onOpenCustomCake={() => setIsCustomCakeOpen(true)}
               onNavigateHome={() => {
                 setSelectedOfferBanner(null);
                 setActiveCategory('all');
@@ -324,6 +329,7 @@ function CafeHome() {
             onOpenReservation={() => setIsReservationOpen(true)}
             onOpenAdmin={handleOpenAdmin}
             onOpenProfileMenu={() => setIsCustomerMenuOpen(true)}
+            onOpenCustomCake={() => setIsCustomCakeOpen(true)}
             banners={promoBanners}
             onSelectBanner={(banner) => {
               setSelectedOfferBanner(banner);
@@ -377,7 +383,55 @@ function CafeHome() {
                   Freshly prepared with single-origin beans, organic produce, and stone ovens.
                 </p>
               </div>
+
+              {/* Quick trigger button for custom bakery items */}
+              <button
+                id="btn-quick-custom-cake"
+                onClick={() => setIsCustomCakeOpen(true)}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-transparent hover:from-rose-500/20 hover:via-amber-500/20 text-rose-700 dark:text-rose-300 border border-rose-300/60 dark:border-rose-800/60 text-xs font-bold transition-all hover:scale-102 active:scale-98 cursor-pointer"
+              >
+                <Cake className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                <span>Request Custom Cake</span>
+              </button>
             </div>
+
+            {/* Custom Cake / Made-to-Order Banner (Highlight when in Bakery or All) */}
+            {(activeCategory === 'bakery' || activeCategory === 'all') && (
+              <div
+                id="custom-cake-promo-banner"
+                className="mb-6 p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-rose-950 via-amber-950 to-stone-900 text-white shadow-xl relative overflow-hidden border border-rose-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group"
+              >
+                <div className="absolute -right-12 -top-12 w-44 h-44 bg-rose-500/15 rounded-full blur-3xl pointer-events-none" />
+                <div className="flex items-center gap-3.5 relative z-10">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-rose-500/30">
+                    <Cake className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-rose-500 text-white tracking-wide">
+                        Made-to-Order Bakery
+                      </span>
+                      <span className="text-xs text-rose-200">Celebration Cakes &amp; Bakery Pre-Orders</span>
+                    </div>
+                    <h3 className="text-base sm:text-lg font-serif font-bold text-white mt-0.5">
+                      Need a custom celebration cake with your own reference design?
+                    </h3>
+                    <p className="text-xs text-stone-300 max-w-xl">
+                      Upload your photo, select customized flavors, eggless options, weight, and celebration message. Our master pastry chef bakes it fresh for your event!
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  id="btn-open-custom-cake-flow"
+                  onClick={() => setIsCustomCakeOpen(true)}
+                  className="relative z-10 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 text-stone-950 font-bold text-xs sm:text-sm hover:from-amber-300 hover:to-rose-300 shadow-md shadow-rose-900/40 hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0"
+                >
+                  <Cake className="w-4 h-4" />
+                  <span>Design Custom Cake</span>
+                </button>
+              </div>
+            )}
 
             {/* Food Item Grids (Zomato-Inspired High Converting Layout) */}
             {isLoading ? (
@@ -450,6 +504,13 @@ function CafeHome() {
                 </AnimatePresence>
               </motion.div>
             )}
+
+            {/* Download Complete Menu in PDF Format */}
+            <MenuPdfDownloadSection
+              menuItems={menuItems}
+              categories={categories}
+              cafeInfo={cafeInfo}
+            />
 
             {/* Reserve Table Interactive Feature Banner */}
             <div className="mt-14 rounded-3xl bg-gradient-to-r from-stone-900 via-amber-950/60 to-stone-900 text-white p-6 sm:p-10 border border-amber-900/40 shadow-xl relative overflow-hidden">
@@ -673,6 +734,16 @@ function CafeHome() {
         onClose={() => setIsCustomerMenuOpen(false)}
         onOpenReservation={() => setIsReservationOpen(true)}
         onOpenAdmin={handleOpenAdmin}
+        onOpenCustomCake={() => setIsCustomCakeOpen(true)}
+      />
+
+      {/* Made-to-Order Custom Cake & Celebration Bakery Modal */}
+      <CustomCakeModal
+        isOpen={isCustomCakeOpen}
+        onClose={() => setIsCustomCakeOpen(false)}
+        onOrderPlaced={(newOrder) => {
+          setActiveOrder(newOrder);
+        }}
       />
 
       {/* Order Status Modal (Active Tracking) */}

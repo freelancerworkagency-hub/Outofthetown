@@ -8,6 +8,10 @@ import {
   PackageCheck,
   RefreshCw,
   Phone,
+  Cake,
+  Calendar,
+  Sparkles,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import type { Order, OrderStatus } from '../types.js';
@@ -162,6 +166,77 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ order: initi
               })}
             </div>
           </div>
+
+          {/* Custom Celebration Cake Details Card */}
+          {(order.isCustomCake || order.customCakeDetails) && (
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-500/10 via-amber-500/10 to-transparent border border-rose-200 dark:border-rose-900/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-rose-500 text-white flex items-center justify-center shadow-xs">
+                    <Cake className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                      Made-to-Order Celebration Cake
+                    </span>
+                    <h5 className="text-xs sm:text-sm font-bold text-stone-900 dark:text-stone-100 font-serif">
+                      {order.customCakeDetails?.occasion || 'Special Celebration'}
+                    </h5>
+                  </div>
+                </div>
+                {order.customCakeDetails?.isEggless && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    100% Eggless
+                  </span>
+                )}
+              </div>
+
+              {/* Reference Image and Specs */}
+              <div className="flex items-start gap-3 bg-white/60 dark:bg-stone-900/60 p-3 rounded-xl border border-stone-200 dark:border-stone-800">
+                {order.customCakeDetails?.referenceImageUrl && (
+                  <img
+                    src={order.customCakeDetails.referenceImageUrl}
+                    alt="Custom Cake Reference"
+                    referrerPolicy="no-referrer"
+                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover border border-stone-300 dark:border-stone-700 shrink-0"
+                  />
+                )}
+                <div className="flex-1 min-w-0 text-xs space-y-1">
+                  <p className="font-semibold text-stone-900 dark:text-stone-100">
+                    <span className="text-stone-500 font-normal">Flavor &amp; Size:</span>{' '}
+                    {order.customCakeDetails?.weightKg || 1}kg • {order.customCakeDetails?.flavor}
+                  </p>
+                  {order.customCakeDetails?.shape && (
+                    <p className="text-stone-600 dark:text-stone-400">
+                      <span className="text-stone-500">Shape:</span> {order.customCakeDetails.shape}
+                    </p>
+                  )}
+                  {order.customCakeDetails?.targetDate && (
+                    <p className="text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Event Date: {order.customCakeDetails.targetDate} ({order.customCakeDetails.targetTime})</span>
+                    </p>
+                  )}
+                  {order.customCakeDetails?.messageOnCake && (
+                    <p className="text-rose-600 dark:text-rose-400 font-medium">
+                      Piped Message: "{order.customCakeDetails.messageOnCake}"
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {order.customCakeDetails?.designDescription && (
+                <div className="text-xs bg-stone-100/70 dark:bg-stone-800/70 p-2.5 rounded-xl text-stone-700 dark:text-stone-300">
+                  <span className="font-bold text-stone-900 dark:text-stone-100">Design Instructions: </span>
+                  {order.customCakeDetails.designDescription}
+                </div>
+              )}
+
+              <p className="text-[11px] text-stone-500 dark:text-stone-400 italic">
+                Our pastry chef will review your reference image and contact you on WhatsApp/Phone for proof confirmation.
+              </p>
+            </div>
+          )}
 
           {/* Items Summary */}
           <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 space-y-2">

@@ -74,6 +74,22 @@ export const OrderItemSchema = z.object({
   image: z.string(),
 });
 
+export const CustomCakeDetailsSchema = z.object({
+  itemType: z.string().max(60).optional(),
+  occasion: z.string().max(80),
+  flavor: z.string().max(80),
+  weightKg: z.number().positive(),
+  shape: z.string().max(60).optional(),
+  isEggless: z.boolean().default(true),
+  messageOnCake: z.string().max(150).optional(),
+  designDescription: z.string().max(2000),
+  referenceImageUrl: z.string().optional(),
+  targetDate: z.string(),
+  targetTime: z.string(),
+  specialInstructions: z.string().max(500).optional(),
+  estimatedPriceQuote: z.number().optional(),
+});
+
 export const CreateOrderSchema = z
   .object({
     customerName: z.string().trim().min(2, 'Customer full name is required (minimum 2 characters)').max(60),
@@ -85,6 +101,9 @@ export const CreateOrderSchema = z
     items: z.array(OrderItemSchema).min(1, 'Order must contain at least 1 item'),
     promoCode: z.string().max(30).optional(),
     paymentMethod: z.enum(['cash', 'card', 'upi', 'counter']).default('upi'),
+    isCustomCake: z.boolean().optional(),
+    customCakeDetails: CustomCakeDetailsSchema.optional(),
+    specialInstructions: z.string().max(500).optional(),
   })
   .refine(
     (data) => {
