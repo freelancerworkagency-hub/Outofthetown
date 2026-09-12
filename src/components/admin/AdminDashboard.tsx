@@ -172,10 +172,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         api.getCategories().catch(() => []),
       ]);
       setOrders(oList);
-      if (isInitialOrdersLoadRef.current && oList && oList.length > 0) {
-        oList.forEach((o) => knownOrderIdsRef.current.add(o.id));
-        isInitialOrdersLoadRef.current = false;
-      }
+      (oList || []).forEach((o) => knownOrderIdsRef.current.add(o.id));
+      isInitialOrdersLoadRef.current = false;
       setReservations(rList);
       setMenuItems(mList);
       setBanners(bList);
@@ -315,18 +313,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           const incomingOrder = newlyArrived[0];
           showNotification(
-            `🔔 NEW ORDER #${incomingOrder.id.slice(-6).toUpperCase()} RECEIVED! Auto KOT Generated`
+            `🔔 NEW ORDER #${incomingOrder.id.slice(-6).toUpperCase()} RECEIVED! (${incomingOrder.customerName || 'Customer'})`
           );
 
-          // Automatically generate KOT and trigger system print dialog
+          // Prepare KOT modal for administrative review
           setAutoKotOrder(incomingOrder);
-          setTimeout(() => {
-            try {
-              window.print();
-            } catch (printErr) {
-              console.log('Automated print initiated', printErr);
-            }
-          }, 600);
         }
       } catch (err) {
         // Continue polling silently
@@ -381,6 +372,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleDeleteOrder = (orderId: string) => {
     setOrders((prev) => prev.filter((o) => o.id !== orderId));
+  };
+
+  const handlePurgeAllOrders = () => {
+    setOrders([]);
+    knownOrderIdsRef.current.clear();
   };
 
   const handleCancelOrder = (orderId: string, reason?: string) => {
@@ -759,6 +755,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onUpdateOrderStatus={handleUpdateOrderStatus}
             onDeleteOrder={handleDeleteOrder}
             onCancelOrder={handleCancelOrder}
+            onPurgeAllOrders={handlePurgeAllOrders}
             onRefresh={loadAllData}
             isLoading={isLoading}
             cafeInfo={cafeInfo}

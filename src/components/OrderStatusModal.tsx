@@ -58,7 +58,7 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ order: initi
     <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs">
       <div className="relative w-full max-w-lg rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl overflow-hidden my-8">
         {/* Header */}
-        <div className="p-6 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-50/50 dark:bg-stone-850/50">
+        <div className="p-6 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-50/80 dark:bg-stone-900/80">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs uppercase tracking-wider font-bold text-amber-600 dark:text-amber-400">
@@ -164,7 +164,7 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ order: initi
           </div>
 
           {/* Items Summary */}
-          <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 space-y-2">
+          <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 space-y-2">
             <h4 className="text-xs font-bold text-stone-800 dark:text-stone-200 uppercase tracking-wider">
               Items Ordered
             </h4>
@@ -208,7 +208,7 @@ export const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ order: initi
           </div>
         </div>
 
-        <div className="p-4 bg-stone-50 dark:bg-stone-850 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between text-xs">
+        <div className="p-4 bg-stone-50 dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400">
             <Phone className="w-3.5 h-3.5 text-amber-600" />
             <span>Need help? Call OTT at +91 98289 19626</span>

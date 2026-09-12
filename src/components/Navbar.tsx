@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Search,
   ShoppingBag,
@@ -7,6 +8,7 @@ import {
   Mic,
   MicOff,
   ChevronLeft,
+  MapPin,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext.js';
 import { FilterBar, FilterBarProps } from './FilterBar.js';
@@ -19,6 +21,7 @@ export interface NavbarProps extends Omit<FilterBarProps, 'isSticky'> {
   onOpenAdmin?: () => void;
   onNavigateHome?: () => void;
   isOfferDetailView?: boolean;
+  isScrolled?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -45,6 +48,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenProfileMenu,
   onNavigateHome,
   isOfferDetailView = false,
+  isScrolled = false,
 }) => {
   const { totalItemsCount, total, setIsCartOpen } = useCart();
 
@@ -229,8 +233,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </div>
 
-        {/* Right 2: Action Icons (Cart, Theme, Table Reservation) */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* Right 2: Action Icons (Cart, Profile) */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Cart Trigger Button */}
           <button
             id="navbar-open-cart-btn"

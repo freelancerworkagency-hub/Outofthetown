@@ -245,7 +245,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             activeFiltersCount > 0
               ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600 shadow-amber-500/20 shadow-sm'
-              : 'bg-white dark:bg-stone-800/90 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-amber-400 hover:bg-stone-50 dark:hover:bg-stone-750'
+              : 'bg-white dark:bg-stone-800/90 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-amber-400 hover:bg-stone-50 dark:hover:bg-stone-700'
           }`}
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -265,7 +265,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
               sortBy !== 'popular'
                 ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-800 dark:text-amber-300 ring-2 ring-amber-500/20'
-                : 'bg-white dark:bg-stone-800/90 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400 hover:bg-stone-50 dark:hover:bg-stone-750'
+                : 'bg-white dark:bg-stone-800/90 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400 hover:bg-stone-50 dark:hover:bg-stone-700'
             }`}
           >
             <ArrowUpDown className="w-3.5 h-3.5 text-stone-400" />
@@ -310,7 +310,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             vegOnly
               ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-500 text-emerald-700 dark:text-emerald-400 ring-2 ring-emerald-500/20'
-              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-750'
+              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700'
           }`}
         >
           <span className="w-3.5 h-3.5 rounded-xs border border-emerald-600 flex items-center justify-center p-0.5">
@@ -327,7 +327,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             nonVegOnly
               ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-500 text-rose-700 dark:text-rose-400 ring-2 ring-rose-500/20'
-              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-750'
+              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700'
           }`}
         >
           <span className="w-3.5 h-3.5 rounded-xs border border-rose-600 flex items-center justify-center p-0.5">
@@ -344,7 +344,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             ratingOnly
               ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-800 dark:text-amber-300 ring-2 ring-amber-500/20'
-              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-750'
+              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700'
           }`}
         >
           <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
@@ -359,7 +359,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             bestsellerOnly
               ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-800 dark:text-amber-300 ring-2 ring-amber-500/20'
-              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-750'
+              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700'
           }`}
         >
           <Flame className="w-3.5 h-3.5 text-amber-500" />
@@ -374,7 +374,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             offersOnly
               ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-500 text-purple-700 dark:text-purple-300 ring-2 ring-purple-500/20'
-              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-750'
+              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700'
           }`}
         >
           <Percent className="w-3.5 h-3.5 text-purple-500" />
@@ -389,7 +389,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             maxPrice === 250
               ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20'
-              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-750'
+              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700'
           }`}
         >
           <Tag className="w-3.5 h-3.5 text-blue-500" />
@@ -404,7 +404,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             quickPrepOnly
               ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-800 dark:text-amber-300 ring-2 ring-amber-500/20'
-              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-750'
+              : 'bg-white dark:bg-stone-800/90 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-700'
           }`}
         >
           <Clock className="w-3.5 h-3.5 text-amber-500" />

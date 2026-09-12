@@ -74,17 +74,52 @@ export const OrderItemSchema = z.object({
   image: z.string(),
 });
 
-export const CreateOrderSchema = z.object({
-  customerName: z.string().trim().min(2, 'Customer name is required').max(60),
-  customerPhone: z.string().trim().regex(/^[0-9+\s-]{8,15}$/, 'Invalid phone number format'),
-  customerEmail: z.string().email().optional().or(z.literal('')),
-  orderType: z.enum(['delivery', 'pickup', 'dine-in']),
-  deliveryAddress: z.string().max(250).optional(),
-  tableNumber: z.string().max(20).optional(),
-  items: z.array(OrderItemSchema).min(1, 'Order must contain at least 1 item'),
-  promoCode: z.string().max(30).optional(),
-  paymentMethod: z.enum(['cash', 'card', 'upi', 'counter']).default('upi'),
-});
+export const CreateOrderSchema = z
+  .object({
+    customerName: z.string().trim().min(2, 'Customer full name is required (minimum 2 characters)').max(60),
+    customerPhone: z.string().trim().regex(/^[0-9+\s-]{8,15}$/, 'Invalid phone number format'),
+    customerEmail: z.string().email().optional().or(z.literal('')),
+    orderType: z.enum(['delivery', 'pickup', 'dine-in']),
+    deliveryAddress: z.string().max(250).optional(),
+    tableNumber: z.string().max(20).optional(),
+    items: z.array(OrderItemSchema).min(1, 'Order must contain at least 1 item'),
+    promoCode: z.string().max(30).optional(),
+    paymentMethod: z.enum(['cash', 'card', 'upi', 'counter']).default('upi'),
+  })
+  .refine(
+    (data) => {
+      const digits = data.customerPhone.replace(/\D/g, '');
+      return digits.length >= 10;
+    },
+    {
+      message: 'Valid 10-digit phone number is required for order updates',
+      path: ['customerPhone'],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.orderType === 'delivery') {
+        return !!data.deliveryAddress && data.deliveryAddress.trim().length >= 5;
+      }
+      return true;
+    },
+    {
+      message: 'Delivery address is required for delivery orders (minimum 5 characters)',
+      path: ['deliveryAddress'],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.orderType === 'dine-in') {
+        return !!data.tableNumber && data.tableNumber.trim().length >= 1;
+      }
+      return true;
+    },
+    {
+      message: 'Table number is required for dine-in orders',
+      path: ['tableNumber'],
+    }
+  );
 
 export const UpdateOrderStatusSchema = z.object({
   status: z.enum(['pending', 'accepted', 'preparing', 'ready', 'delivered', 'cancelled']),

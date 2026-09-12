@@ -21,6 +21,7 @@ import {
   Info,
   UtensilsCrossed,
   Flame,
+  MapPin,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext.js';
 import { useCart } from '../context/CartContext.js';
@@ -37,6 +38,7 @@ interface TopPromotionalHeroProps {
   banners: PromoBanner[];
   onSelectBanner: (banner: PromoBanner) => void;
   onSelectCategory?: (category: string) => void;
+  showOverlayHeader?: boolean;
 }
 
 export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
@@ -49,6 +51,7 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
   onOpenProfileMenu,
   banners,
   onSelectBanner,
+  showOverlayHeader = true,
 }) => {
   const { isDark, toggleTheme } = useTheme();
   const { totalItemsCount, total, setIsCartOpen, applyPromo, appliedPromo } = useCart();
@@ -213,7 +216,13 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
         The background image extends to the bottom and slowly fades with white background
         ========================================================================
       */}
-      <div className="relative w-full min-h-[350px] xs:min-h-[370px] sm:min-h-[395px] md:min-h-[430px] flex flex-col justify-between overflow-hidden">
+      <div
+        className={`relative w-full ${
+          showOverlayHeader
+            ? 'min-h-[350px] xs:min-h-[370px] sm:min-h-[395px] md:min-h-[430px]'
+            : 'min-h-[210px] xs:min-h-[230px] sm:min-h-[260px] md:min-h-[290px]'
+        } flex flex-col justify-between overflow-hidden`}
+      >
         {/* Sliding Track for promotional banners and deals */}
         {(() => {
           const safeSlide = totalSlides > 0 ? (currentSlide >= totalSlides ? 0 : currentSlide) : 0;
@@ -230,8 +239,10 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
                   key={combo.id}
                   id={`hero-combo-${combo.id}`}
                   onClick={() => onSelectBanner(combo)}
-                  className="w-full h-full shrink-0 relative cursor-pointer overflow-hidden flex flex-col justify-start pb-6 sm:pb-8 px-4 sm:px-10 md:px-16 bg-stone-50 dark:bg-stone-950 group"
-                  style={{ paddingTop: `${headerHeight + 28}px` }}
+                  className={`w-full h-full shrink-0 relative cursor-pointer overflow-hidden flex flex-col ${
+                    showOverlayHeader ? 'justify-start' : 'justify-end'
+                  } pb-5 sm:pb-7 px-4 sm:px-10 md:px-16 bg-stone-50 dark:bg-stone-950 group`}
+                  style={{ paddingTop: showOverlayHeader ? `${headerHeight + 28}px` : '16px' }}
                 >
                   {/* Full-bleed food promotional banner image extending fully to bottom */}
                   <img
@@ -281,143 +292,180 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
           - Search Bar + Veg Mode Toggle
           =============================================================
         */}
-        <div
-          ref={headerRef}
-          className="relative z-20 w-full max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 pt-2.5 sm:pt-4 pointer-events-auto"
-        >
-          {/* ROW 1: TOP BAR OVERLAPPING BANNER */}
-          <div className="w-full flex items-center justify-between gap-1 sm:gap-4 mb-3 sm:mb-4">
-            {/* Cafe Name with Circular Logo (Matching User Provided Logo Image) */}
-            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-              <img
-                src="/ott-logo.svg"
-                alt="Out of the Town OTT Logo"
-                referrerPolicy="no-referrer"
-                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full drop-shadow-md shrink-0 border border-white/40 object-contain hover:scale-105 transition-transform"
-              />
-              <div className="leading-tight min-w-0">
-                <span className="font-serif font-extrabold text-sm sm:text-base text-white tracking-tight truncate block drop-shadow-xs">
-                  Out of the Town
-                </span>
-                <span className="text-[10px] sm:text-xs text-amber-300 font-semibold tracking-wide truncate block drop-shadow-xs">
-                  Highway Restro &amp; Bakery
-                </span>
-              </div>
-            </div>
-
-            {/* Right Action Icons Overlapping Banner */}
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {/* Cart Button */}
-              <button
-                id="btn-open-cart-hero"
-                onClick={() => setIsCartOpen(true)}
-                className="relative inline-flex items-center gap-1 px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs sm:text-sm rounded-full shadow-lg shadow-amber-600/40 transition-all hover:scale-105 cursor-pointer shrink-0"
-              >
-                <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Cart</span>
-                {totalItemsCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-white text-amber-700 font-bold text-[10px]">
-                    {totalItemsCount}
+        {showOverlayHeader && (
+          <div
+            ref={headerRef}
+            className="relative z-20 w-full max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 pt-2.5 sm:pt-4 pointer-events-auto"
+          >
+            {/* ROW 1: TOP BAR OVERLAPPING BANNER */}
+            <div className="w-full flex items-center justify-between gap-1 sm:gap-4 mb-3 sm:mb-4">
+              {/* Cafe Name with Circular Logo (Matching User Provided Logo Image) */}
+              <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                <img
+                  src="/ott-logo.svg"
+                  alt="Out of the Town OTT Logo"
+                  referrerPolicy="no-referrer"
+                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-full drop-shadow-md shrink-0 border border-white/40 object-contain hover:scale-105 transition-transform"
+                />
+                <div className="leading-tight min-w-0">
+                  <span className="font-serif font-extrabold text-sm sm:text-base text-white tracking-tight truncate block drop-shadow-xs">
+                    Out of the Town
                   </span>
-                )}
-              </button>
-
-              {/* User Profile Avatar "S" (Satyam) - Opens Customer Profile Menu */}
-              <button
-                id="btn-profile-avatar"
-                onClick={() => {
-                  if (onOpenProfileMenu) {
-                    onOpenProfileMenu();
-                  } else {
-                    setShowProfileModal(true);
-                  }
-                }}
-                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-2 border-white/80 shadow-md flex items-center justify-center font-bold text-xs sm:text-sm hover:scale-105 transition-all cursor-pointer shrink-0"
-                aria-label="Customer Profile Menu"
-              >
-                S
-              </button>
-            </div>
-          </div>
-
-          {/* ROW 2: SEARCH BAR + VEG MODE TOGGLE OVERLAPPING BANNER */}
-          <div className="w-full max-w-3xl mx-auto flex items-center justify-center gap-2 sm:gap-3">
-            {/* Main Rounded Search Card */}
-            <div className="flex-1 min-w-0 flex items-center bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl border border-white/50 dark:border-stone-700/80 shadow-xl px-3 sm:px-4 py-2 sm:py-3 gap-2 sm:gap-2.5 transition-all focus-within:ring-2 focus-within:ring-amber-500">
-              {/* Pinkish/Amber Magnifying Glass */}
-              <Search className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-rose-500 dark:text-rose-400 stroke-[2.5] shrink-0" />
-
-              {/* Animated / User Controlled Search Input */}
-              <div className="flex-1 min-w-0 relative flex items-center">
-                <input
-                  id="search-input-top-hero"
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  placeholder={placeholders[placeholderIndex]}
-                  className="w-full bg-transparent text-xs sm:text-base font-normal text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 focus:outline-hidden truncate"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => onSearchChange('')}
-                    className="p-1 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer shrink-0"
-                    aria-label="Clear search"
-                  >
-                    <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  </button>
-                )}
+                  <span className="text-[10px] sm:text-xs text-amber-300 font-semibold tracking-wide truncate block drop-shadow-xs">
+                    Highway Restro &amp; Bakery
+                  </span>
+                </div>
               </div>
 
-              {/* Vertical Separator */}
-              <div className="h-5 sm:h-6 w-px bg-stone-200 dark:bg-stone-700 shrink-0" />
+              {/* Right Action Icons Overlapping Banner */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {/* Restaurant Location shown just beside the Cart option */}
+                <button
+                  id="hero-restaurant-location-btn"
+                  onClick={() => {
+                    const el = document.getElementById('location-and-map-section');
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                      window.open(
+                        'https://maps.google.com/maps?q=Out+of+the+Town+-+Restro+and+Bakery,+Kukas,+Jaipur,+Rajasthan',
+                        '_blank',
+                        'noopener,noreferrer'
+                      );
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 bg-black/40 hover:bg-black/60 text-white font-medium text-xs rounded-full backdrop-blur-md border border-white/30 shadow-md transition-all hover:scale-105 cursor-pointer shrink-0 text-left group"
+                  title="Restaurant Location: SP 41 B, Kukas, Jaipur (NH-48) • Click to view map & directions"
+                >
+                  <div className="relative shrink-0 flex items-center justify-center">
+                    <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400 fill-rose-400 group-hover:scale-110 transition-transform" />
+                    <span className="absolute -top-0.5 -right-0.5 flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500" />
+                    </span>
+                  </div>
+                  <div className="flex flex-col leading-tight whitespace-nowrap">
+                    <span className="text-[10px] sm:text-xs font-bold text-white">
+                      Kukas, Jaipur
+                    </span>
+                    <span className="text-[8px] sm:text-[9px] font-semibold text-amber-300 hidden xs:inline">
+                      NH-48 Highway
+                    </span>
+                  </div>
+                </button>
 
-              {/* Microphone Button with Voice Search Animation */}
-              <button
-                id="btn-voice-search"
-                onClick={handleMicClick}
-                aria-label="Search by voice"
-                className={`p-1 sm:p-1.5 rounded-full transition-all cursor-pointer shrink-0 ${
-                  isListening
-                    ? 'bg-rose-100 text-rose-600 dark:bg-rose-950 animate-pulse'
-                    : 'text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-stone-800'
-                }`}
-              >
-                {isListening ? (
-                  <MicOff className="w-4 h-4 sm:w-5 sm:h-5 animate-bounce" />
-                ) : (
-                  <Mic className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />
-                )}
-              </button>
+                {/* Cart Button */}
+                <button
+                  id="btn-open-cart-hero"
+                  onClick={() => setIsCartOpen(true)}
+                  className="relative inline-flex items-center gap-1 px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs sm:text-sm rounded-full shadow-lg shadow-amber-600/40 transition-all hover:scale-105 cursor-pointer shrink-0"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Cart</span>
+                  {totalItemsCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-white text-amber-700 font-bold text-[10px]">
+                      {totalItemsCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* User Profile Avatar "S" (Satyam) - Opens Customer Profile Menu */}
+                <button
+                  id="btn-profile-avatar"
+                  onClick={() => {
+                    if (onOpenProfileMenu) {
+                      onOpenProfileMenu();
+                    } else {
+                      setShowProfileModal(true);
+                    }
+                  }}
+                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-2 border-white/80 shadow-md flex items-center justify-center font-bold text-xs sm:text-sm hover:scale-105 transition-all cursor-pointer shrink-0"
+                  aria-label="Customer Profile Menu"
+                >
+                  S
+                </button>
+              </div>
             </div>
 
-            {/* VEG MODE Toggle Overlapping Banner */}
-            <div className="flex flex-col items-center justify-center shrink-0 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-2xl border border-white/50 dark:border-stone-700/80 shadow-xl">
-              <span className="text-[9px] sm:text-[10px] font-extrabold tracking-tight text-stone-800 dark:text-stone-200 leading-tight text-center">
-                VEG
-              </span>
-              <span className="text-[8px] sm:text-[9px] font-extrabold tracking-wider text-stone-600 dark:text-stone-400 -mt-0.5 leading-tight text-center">
-                MODE
-              </span>
-              <button
-                id="veg-mode-toggle-switch"
-                type="button"
-                role="switch"
-                aria-checked={vegOnly}
-                onClick={onToggleVegOnly}
-                className={`relative mt-0.5 sm:mt-1 inline-flex h-5 w-9 sm:h-6 sm:w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                  vegOnly ? 'bg-emerald-600 shadow-emerald-500/30 shadow-xs' : 'bg-stone-300 dark:bg-stone-700'
-                }`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`pointer-events-none inline-block h-4 w-4 sm:h-5 sm:w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                    vegOnly ? 'translate-x-4 sm:translate-x-5' : 'translate-x-0'
+            {/* ROW 2: SEARCH BAR + VEG MODE TOGGLE OVERLAPPING BANNER */}
+            <div className="w-full max-w-3xl mx-auto flex items-center justify-center gap-2 sm:gap-3">
+              {/* Main Rounded Search Card */}
+              <div className="flex-1 min-w-0 flex items-center bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl border border-white/50 dark:border-stone-700/80 shadow-xl px-3 sm:px-4 py-2 sm:py-3 gap-2 sm:gap-2.5 transition-all focus-within:ring-2 focus-within:ring-amber-500">
+                {/* Pinkish/Amber Magnifying Glass */}
+                <Search className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-rose-500 dark:text-rose-400 stroke-[2.5] shrink-0" />
+
+                {/* Animated / User Controlled Search Input */}
+                <div className="flex-1 min-w-0 relative flex items-center">
+                  <input
+                    id="search-input-top-hero"
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => onSearchChange(e.target.value)}
+                    placeholder={placeholders[placeholderIndex]}
+                    className="w-full bg-transparent text-xs sm:text-base font-normal text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 focus:outline-hidden truncate"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => onSearchChange('')}
+                      className="p-1 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer shrink-0"
+                      aria-label="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Vertical Separator */}
+                <div className="h-5 sm:h-6 w-px bg-stone-200 dark:bg-stone-700 shrink-0" />
+
+                {/* Microphone Button with Voice Search Animation */}
+                <button
+                  id="btn-voice-search"
+                  onClick={handleMicClick}
+                  aria-label="Search by voice"
+                  className={`p-1 sm:p-1.5 rounded-full transition-all cursor-pointer shrink-0 ${
+                    isListening
+                      ? 'bg-rose-100 text-rose-600 dark:bg-rose-950 animate-pulse'
+                      : 'text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-stone-800'
                   }`}
-                />
-              </button>
+                >
+                  {isListening ? (
+                    <MicOff className="w-4 h-4 sm:w-5 sm:h-5 animate-bounce" />
+                  ) : (
+                    <Mic className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />
+                  )}
+                </button>
+              </div>
+
+              {/* VEG MODE Toggle Overlapping Banner */}
+              <div className="flex flex-col items-center justify-center shrink-0 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-2xl border border-white/50 dark:border-stone-700/80 shadow-xl">
+                <span className="text-[9px] sm:text-[10px] font-extrabold tracking-tight text-stone-800 dark:text-stone-200 leading-tight text-center">
+                  VEG
+                </span>
+                <span className="text-[8px] sm:text-[9px] font-extrabold tracking-wider text-stone-600 dark:text-stone-400 -mt-0.5 leading-tight text-center">
+                  MODE
+                </span>
+                <button
+                  id="veg-mode-toggle-switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={vegOnly}
+                  onClick={onToggleVegOnly}
+                  className={`relative mt-0.5 sm:mt-1 inline-flex h-5 w-9 sm:h-6 sm:w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                    vegOnly ? 'bg-emerald-600 shadow-emerald-500/30 shadow-xs' : 'bg-stone-300 dark:bg-stone-700'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-4 w-4 sm:h-5 sm:w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      vegOnly ? 'translate-x-4 sm:translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Left & Right Chevron Controls */}
         {totalSlides > 1 && (
@@ -429,7 +477,11 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
                 setCurrentSlide((prev) => (prev - 1 + totalSlides) % totalSlides);
               }}
               aria-label="Previous slide"
-              style={{ top: `calc(${headerHeight}px + (100% - ${headerHeight}px) / 2)` }}
+              style={{
+                top: showOverlayHeader
+                  ? `calc(${headerHeight}px + (100% - ${headerHeight}px) / 2)`
+                  : '50%',
+              }}
               className="absolute left-1.5 sm:left-3 -translate-y-1/2 z-20 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-black/40 text-white border border-white/30 backdrop-blur-md shadow-lg flex items-center justify-center hover:bg-black/65 hover:scale-110 active:scale-95 transition-all cursor-pointer"
             >
               <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
@@ -441,7 +493,11 @@ export const TopPromotionalHero: React.FC<TopPromotionalHeroProps> = ({
                 setCurrentSlide((prev) => (prev + 1) % totalSlides);
               }}
               aria-label="Next slide"
-              style={{ top: `calc(${headerHeight}px + (100% - ${headerHeight}px) / 2)` }}
+              style={{
+                top: showOverlayHeader
+                  ? `calc(${headerHeight}px + (100% - ${headerHeight}px) / 2)`
+                  : '50%',
+              }}
               className="absolute right-1.5 sm:right-3 -translate-y-1/2 z-20 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-black/40 text-white border border-white/30 backdrop-blur-md shadow-lg flex items-center justify-center hover:bg-black/65 hover:scale-110 active:scale-95 transition-all cursor-pointer"
             >
               <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />

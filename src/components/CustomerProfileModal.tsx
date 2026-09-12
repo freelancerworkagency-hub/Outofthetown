@@ -222,7 +222,7 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                 <button
                   id="customer-menu-my-orders-btn"
                   onClick={() => setActiveTab('orders')}
-                  className="w-full flex items-center justify-between p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/80 hover:bg-stone-100 dark:hover:bg-stone-750 border border-stone-200 dark:border-stone-700/80 font-semibold text-stone-900 dark:text-stone-100 transition-all cursor-pointer group"
+                  className="w-full flex items-center justify-between p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/80 hover:bg-stone-100 dark:hover:bg-stone-700 border border-stone-200 dark:border-stone-700/80 font-semibold text-stone-900 dark:text-stone-100 transition-all cursor-pointer group"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">

@@ -34,8 +34,6 @@ const TIME_SLOTS = [
 const SEATING_OPTIONS: { id: SeatingArea; label: string; desc: string; icon: string }[] = [
   { id: 'garden_patio', label: 'Lush Garden Lawn', desc: 'Open-air green lawn seating under fairy lights and starry highway sky', icon: '🌿' },
   { id: 'indoor_lounge', label: 'AC Family Lounge', desc: 'Air-conditioned comfort with plush booth seating and warm ambient lights', icon: '🛋️' },
-  { id: 'window_nook', label: 'Highway View Deck', desc: 'Elevated seating overlooking the scenic Jaipur-Delhi expressway', icon: '🛣️' },
-  { id: 'chef_counter', label: 'Bakery & Coffee Bar', desc: 'Near the live artisan dessert display and cold brew station', icon: '☕' },
 ];
 
 export const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose }) => {
@@ -136,24 +134,25 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onCl
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs">
       <div className="relative w-full max-w-xl rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl overflow-hidden transition-all my-8">
-        {/* Header */}
-        <div className="p-6 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-50/50 dark:bg-stone-850/50">
+        {/* Header - High contrast warm gradient with crisp visible text */}
+        <div className="p-6 border-b border-amber-600/30 dark:border-stone-800 flex items-center justify-between bg-gradient-to-r from-amber-700 via-amber-800 to-orange-800 dark:from-amber-950 dark:via-stone-900 dark:to-orange-950 text-white shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-amber-600 text-white shadow-md shadow-amber-600/20">
+            <div className="p-2.5 rounded-2xl bg-white/20 text-white shadow-md backdrop-blur-md border border-white/25">
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-serif font-bold text-stone-900 dark:text-stone-100">
+              <h2 className="text-xl font-serif font-bold text-white tracking-tight drop-shadow-xs">
                 Reserve Your Table
               </h2>
-              <p className="text-xs text-stone-500 dark:text-stone-400">
+              <p className="text-xs text-amber-100 dark:text-amber-200/90 font-medium">
                 Experience royal thalis, artisan bakes & highway ambiance at Out of the Town
               </p>
             </div>
           </div>
           <button
             onClick={resetForm}
-            className="p-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+            className="p-2 text-white/80 hover:text-white rounded-xl bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
@@ -179,7 +178,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onCl
             </div>
 
             {/* Booking Summary Box */}
-            <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 text-left space-y-2 text-xs">
+            <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-left space-y-2 text-xs">
               <div className="flex justify-between py-1 border-b border-stone-200 dark:border-stone-700">
                 <span className="text-stone-500 dark:text-stone-400">Booking Reference</span>
                 <span className="font-mono font-bold text-amber-600 dark:text-amber-400">

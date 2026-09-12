@@ -87,8 +87,8 @@ function CafeHome() {
 
   useEffect(() => {
     const handleScroll = () => {
-      // Smooth docking matching Zomato mobile app feel
-      setIsScrolled(window.scrollY > 80);
+      // Smooth docking when scrolling past top hero search bar
+      setIsScrolled(window.scrollY > 140);
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
@@ -242,20 +242,20 @@ function CafeHome() {
   };
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-clip bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 transition-colors duration-200 selection:bg-amber-500 selection:text-white font-sans antialiased">
-      {/* Sticky Zomato Search + Veg Mode + Filter Bar with Silky Smooth Transition Animation */}
+    <div
+      className={`min-h-screen w-full max-w-full overflow-x-clip bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 transition-colors duration-200 selection:bg-amber-500 selection:text-white font-sans antialiased ${
+        selectedOfferBanner ? 'pt-14 sm:pt-16' : ''
+      }`}
+    >
+      {/* Sticky Navigation Bar: appears smoothly on scroll or when inspecting combo offer */}
       <AnimatePresence>
-        {(selectedOfferBanner || isScrolled) && (
+        {(isScrolled || selectedOfferBanner) && (
           <motion.div
-            key="zomato-sticky-navbar"
-            initial={{ y: -80, opacity: 0 }}
+            initial={{ y: -90, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -80, opacity: 0 }}
-            transition={{
-              duration: 0.28,
-              ease: [0.16, 1, 0.3, 1],
-            }}
-            className="fixed top-0 left-0 right-0 z-40 w-full"
+            exit={{ y: -90, opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="fixed top-0 left-0 right-0 z-40"
           >
             <Navbar
               searchQuery={searchQuery}
@@ -298,6 +298,7 @@ function CafeHome() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               isOfferDetailView={Boolean(selectedOfferBanner)}
+              isScrolled={isScrolled}
             />
           </motion.div>
         )}
@@ -333,6 +334,7 @@ function CafeHome() {
               const el = document.getElementById('menu-heading');
               el?.scrollIntoView({ behavior: 'smooth' });
             }}
+            showOverlayHeader={true}
           />
 
           {/* Food Categories smoothly positioned on the clean white transition */}
@@ -348,7 +350,7 @@ function CafeHome() {
       )}
 
       {/* Main Homepage Container */}
-      <main className={`w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-4 ${selectedOfferBanner ? 'pt-20 sm:pt-24' : 'pt-2 sm:pt-4'}`}>
+      <main className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-4">
         {selectedOfferBanner ? (
           /* Dedicated Pre-Selected Combo & Offer Details Page */
           <OfferComboView
@@ -363,36 +365,6 @@ function CafeHome() {
           />
         ) : (
           <>
-            {/* 3. Zomato-Style Filter Bar: Rendered in page when at the top; smoothly docks into sticky navbar on scroll */}
-            {!isScrolled && (
-              <FilterBar
-                vegOnly={vegOnly}
-                onToggleVegOnly={() => {
-                  setVegOnly(!vegOnly);
-                  if (!vegOnly) setNonVegOnly(false);
-                }}
-                nonVegOnly={nonVegOnly}
-                onToggleNonVegOnly={() => {
-                  setNonVegOnly(!nonVegOnly);
-                  if (!nonVegOnly) setVegOnly(false);
-                }}
-                bestsellerOnly={bestsellerOnly}
-                onToggleBestseller={() => setBestsellerOnly(!bestsellerOnly)}
-                ratingOnly={ratingOnly}
-                onToggleRating={() => setRatingOnly(!ratingOnly)}
-                offersOnly={offersOnly}
-                onToggleOffers={() => setOffersOnly(!offersOnly)}
-                quickPrepOnly={quickPrepOnly}
-                onToggleQuickPrep={() => setQuickPrepOnly(!quickPrepOnly)}
-                maxPrice={maxPrice}
-                onSelectMaxPrice={setMaxPrice}
-                sortBy={sortBy}
-                onSortChange={setSortBy}
-                onClearAllFilters={handleClearAllFilters}
-                totalFiltered={filteredItems.length}
-              />
-            )}
-
             {/* Section Heading with scroll margin offset for sticky header */}
             <div id="menu-heading" className="flex items-center justify-between mb-5 mt-2 scroll-mt-36">
               <div>
@@ -480,7 +452,7 @@ function CafeHome() {
             )}
 
             {/* Reserve Table Interactive Feature Banner */}
-            <div className="mt-14 rounded-3xl bg-gradient-to-r from-stone-900 via-stone-850 to-stone-900 text-white p-6 sm:p-10 border border-stone-800 shadow-xl relative overflow-hidden">
+            <div className="mt-14 rounded-3xl bg-gradient-to-r from-stone-900 via-amber-950/60 to-stone-900 text-white p-6 sm:p-10 border border-amber-900/40 shadow-xl relative overflow-hidden">
               <div className="relative z-10 max-w-xl space-y-3">
                 <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider">
                   <Calendar className="w-4 h-4" />
@@ -489,11 +461,10 @@ function CafeHome() {
                 <h3 className="text-2xl sm:text-3xl font-serif font-bold text-white tracking-tight">
                   Reserve Your Table at Out of the Town (OTT)
                 </h3>
-                <p className="text-xs sm:text-sm text-stone-300 leading-relaxed">
-                  Whether you desire our serene open-air garden lawn, AC family lounge, breezy highway rooftop,
-                  or the bakery coffee counter, we guarantee your preferred spot.
+                <p className="text-xs sm:text-sm text-stone-200 leading-relaxed">
+                  Whether you desire our serene open-air lush garden lawn under the stars or our comfortable AC family lounge, we guarantee your preferred spot.
                 </p>
-                <div className="pt-2 flex items-center gap-3">
+                <div className="pt-2 flex items-center gap-3 flex-wrap">
                   <button
                     id="book-table-cta-btn"
                     onClick={() => setIsReservationOpen(true)}
@@ -502,7 +473,7 @@ function CafeHome() {
                     <Calendar className="w-4 h-4" />
                     <span>Book a Table Now</span>
                   </button>
-                  <span className="text-xs text-stone-400">
+                  <span className="text-xs text-amber-200/80 font-medium">
                     Instant confirmation • No booking fee
                   </span>
                 </div>

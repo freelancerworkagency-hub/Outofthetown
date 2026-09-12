@@ -1,7 +1,13 @@
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { store } from './store.js';
-import { SupabaseService } from './supabaseService.js';
+import {
+  SupabaseService,
+  isFakeOrder,
+  isFakeReservation,
+  FAKE_ORDER_IDS,
+  FAKE_RESV_IDS,
+} from './supabaseService.js';
 import {
   CreateOrderSchema,
   UpdateOrderStatusSchema,
@@ -257,6 +263,7 @@ apiRouter.get('/user/orders', requireCustomer, (req: Request, res: Response) => 
   const custEmail = customer.email.toLowerCase();
 
   const userOrders = store.orders.filter((o) => {
+    if (isFakeOrder(o)) return false;
     const orderPhone = normalizePhone(o.customerPhone);
     const orderEmail = (o.customerEmail || '').toLowerCase();
     return (custPhone && orderPhone === custPhone) || (custEmail && orderEmail === custEmail);
@@ -272,12 +279,115 @@ apiRouter.get('/user/reservations', requireCustomer, (req: Request, res: Respons
   const custEmail = customer.email.toLowerCase();
 
   const userResvs = store.reservations.filter((r) => {
+    if (isFakeReservation(r)) return false;
     const resvPhone = normalizePhone(r.customerPhone);
     const resvEmail = (r.customerEmail || '').toLowerCase();
     return (custPhone && resvPhone === custPhone) || (custEmail && resvEmail === custEmail);
   });
 
   res.json({ success: true, data: userResvs });
+});
+
+// ==========================================
+// GOOGLE MAPS REVERSE GEOCODING API
+// ==========================================
+apiRouter.get('/maps/reverse-geocode', async (req: Request, res: Response) => {
+  const lat = parseFloat(req.query.lat as string);
+  const lng = parseFloat(req.query.lng as string);
+
+  if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return res.status(400).json({
+      success: false,
+      error: 'Valid latitude and longitude coordinates are required.',
+    });
+  }
+
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GMP_API_KEY;
+
+  if (apiKey) {
+    try {
+      // Mandatory attribution ID solution_id=gmp_git_agentskills_v1 per Google Maps Platform rules
+      const gmpUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}&solution_id=gmp_git_agentskills_v1`;
+      const response = await fetch(gmpUrl);
+      const data = await response.json();
+
+      if (data.status === 'OK' && data.results && data.results.length > 0) {
+        const topResult = data.results[0];
+        const addressComponents = topResult.address_components || [];
+
+        const getComponent = (types: string[]) => {
+          const comp = addressComponents.find((c: any) => types.some((t: string) => c.types.includes(t)));
+          return comp ? comp.long_name : undefined;
+        };
+
+        const streetNumber = getComponent(['street_number']);
+        const route = getComponent(['route']);
+        const sublocality = getComponent(['sublocality_level_1', 'sublocality', 'neighborhood']);
+        const city = getComponent(['locality', 'administrative_area_level_2']);
+        const state = getComponent(['administrative_area_level_1']);
+        const postalCode = getComponent(['postal_code']);
+
+        return res.json({
+          success: true,
+          data: {
+            formattedAddress: topResult.formatted_address,
+            street: [streetNumber, route].filter(Boolean).join(' '),
+            sublocality,
+            city: city || 'Jaipur',
+            state: state || 'Rajasthan',
+            postalCode,
+            location: topResult.geometry?.location || { lat, lng },
+            source: 'google',
+          },
+        });
+      }
+    } catch (err) {
+      console.warn('Google Maps API reverse geocoding error:', err);
+    }
+  }
+
+  // Graceful fallback (e.g. OpenStreetMap Nominatim reverse geocoding)
+  try {
+    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
+    const osmRes = await fetch(nominatimUrl, {
+      headers: {
+        'User-Agent': 'OutOfTheTown-Restro/1.0 (Jaipur Food Delivery App)',
+      },
+    });
+    if (osmRes.ok) {
+      const osmData = await osmRes.json();
+      if (osmData && osmData.display_name) {
+        const addr = osmData.address || {};
+        return res.json({
+          success: true,
+          data: {
+            formattedAddress: osmData.display_name,
+            street: [addr.house_number, addr.road].filter(Boolean).join(' '),
+            sublocality: addr.suburb || addr.neighbourhood || addr.residential,
+            city: addr.city || addr.town || addr.village || addr.county || 'Jaipur',
+            state: addr.state || 'Rajasthan',
+            postalCode: addr.postcode,
+            location: { lat, lng },
+            source: 'osm',
+          },
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Fallback geocoding error:', err);
+  }
+
+  // If network reverse geocoder unavailable, return localized coordinates address
+  return res.json({
+    success: true,
+    data: {
+      formattedAddress: `Near GPS Location (${lat.toFixed(5)}, ${lng.toFixed(5)}), Kukas, Jaipur, Rajasthan`,
+      city: 'Jaipur',
+      state: 'Rajasthan',
+      location: { lat, lng },
+      source: 'coords',
+    },
+  });
 });
 
 // ==========================================
@@ -375,7 +485,7 @@ apiRouter.post('/orders', orderLimiter, (req: Request, res: Response) => {
 // Track an order by ID (with cross-user privacy protection)
 apiRouter.get('/orders/:id', (req: Request, res: Response) => {
   const order = store.orders.find((o) => o.id === req.params.id);
-  if (!order) {
+  if (!order || isFakeOrder(order)) {
     return res.status(404).json({ success: false, error: 'Order not found' });
   }
 
@@ -485,21 +595,54 @@ apiRouter.post('/admin/login', adminAuthLimiter, (req: Request, res: Response) =
 // ADMIN PROTECTED MANAGEMENT ENDPOINTS
 // ==========================================
 
-// Get all orders (admin)
+// Get all orders (admin - strictly genuine customer orders)
 apiRouter.get('/admin/orders', requireAdmin, async (req: Request, res: Response) => {
   // Pull from Supabase if connected
   try {
     const sbOrders = await SupabaseService.fetchOrders();
     if (sbOrders && sbOrders.length > 0) {
-      // Merge unique orders
-      const existingIds = new Set(sbOrders.map((o) => o.id));
-      const localOnly = store.orders.filter((o) => !existingIds.has(o.id));
-      store.orders = [...sbOrders, ...localOnly];
+      // Purge any lingering fake orders in background
+      const fakeOrders = sbOrders.filter(isFakeOrder);
+      for (const fake of fakeOrders) {
+        SupabaseService.deleteOrder(fake.id).catch(() => {});
+      }
+      const realSb = sbOrders.filter((o) => !isFakeOrder(o));
+      const existingIds = new Set(realSb.map((o) => o.id));
+      const localOnly = store.orders.filter((o) => !existingIds.has(o.id) && !isFakeOrder(o));
+      store.orders = [...realSb, ...localOnly];
     }
   } catch {
     // In-memory fallback
   }
+  // Ensure store is also 100% clean of fake orders
+  store.orders = store.orders.filter((o) => !isFakeOrder(o));
   res.json({ success: true, data: store.orders });
+});
+
+// Purge any lingering demo / fake orders (admin)
+apiRouter.post('/admin/orders/purge-fake', requireAdmin, async (req: Request, res: Response) => {
+  const fakeIds: string[] = [];
+  store.orders = store.orders.filter((o) => {
+    if (isFakeOrder(o)) {
+      fakeIds.push(o.id);
+      return false;
+    }
+    return true;
+  });
+  for (const id of [...fakeIds, ...Array.from(FAKE_ORDER_IDS)]) {
+    await SupabaseService.deleteOrder(id).catch(() => {});
+  }
+  res.json({ success: true, message: 'Scrubbed fake orders successfully', purgedCount: fakeIds.length });
+});
+
+// Purge all orders completely for a fresh clean state (admin)
+apiRouter.delete('/admin/orders-purge-all', requireAdmin, async (req: Request, res: Response) => {
+  const count = store.orders.length;
+  for (const o of store.orders) {
+    await SupabaseService.deleteOrder(o.id).catch(() => {});
+  }
+  store.orders = [];
+  res.json({ success: true, message: `Successfully deleted all ${count} recorded orders` });
 });
 
 // Update order status (admin)
@@ -619,18 +762,25 @@ apiRouter.post('/admin/orders/:id/invoice', requireAdmin, async (req: Request, r
   });
 });
 
-// Get all reservations (admin)
+// Get all reservations (admin - strictly genuine customer reservations)
 apiRouter.get('/admin/reservations', requireAdmin, async (req: Request, res: Response) => {
   try {
     const sbReservations = await SupabaseService.fetchReservations();
     if (sbReservations && sbReservations.length > 0) {
-      const existingIds = new Set(sbReservations.map((r) => r.id));
-      const localOnly = store.reservations.filter((r) => !existingIds.has(r.id));
-      store.reservations = [...sbReservations, ...localOnly];
+      // Purge fake reservations in background
+      const fakeResvs = sbReservations.filter(isFakeReservation);
+      for (const fake of fakeResvs) {
+        SupabaseService.deleteReservation(fake.id).catch(() => {});
+      }
+      const realSb = sbReservations.filter((r) => !isFakeReservation(r));
+      const existingIds = new Set(realSb.map((r) => r.id));
+      const localOnly = store.reservations.filter((r) => !existingIds.has(r.id) && !isFakeReservation(r));
+      store.reservations = [...realSb, ...localOnly];
     }
   } catch {
     // In-memory fallback
   }
+  store.reservations = store.reservations.filter((r) => !isFakeReservation(r));
   res.json({ success: true, data: store.reservations });
 });
 

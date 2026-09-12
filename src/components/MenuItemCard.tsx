@@ -15,7 +15,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpenDetails 
   return (
     <div
       id={`menu-item-${item.id}`}
-      className="group relative flex flex-col justify-between h-full min-h-[220px] p-4 sm:p-5 rounded-2xl bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-800 hover:border-amber-400 dark:hover:border-amber-500 shadow-xs hover:shadow-xl transition-all duration-300"
+      className="group relative flex flex-col justify-between h-full min-h-[220px] p-4 sm:p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 hover:border-amber-400 dark:hover:border-amber-500 shadow-xs hover:shadow-xl transition-all duration-300"
     >
       <div className="flex gap-3.5 sm:gap-4 h-full">
         {/* Left Dish Details */}

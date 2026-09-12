@@ -121,6 +121,26 @@ export const api = {
     return json.data;
   },
 
+  async reverseGeocodeLocation(lat: number, lng: number): Promise<{
+    formattedAddress: string;
+    street?: string;
+    sublocality?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    source: 'google' | 'osm' | 'coords';
+    location?: { lat: number; lng: number };
+  }> {
+    const res = await fetch(
+      `${BASE_URL}/maps/reverse-geocode?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`
+    );
+    const json = await res.json();
+    if (!json.success || !json.data) {
+      throw new Error(json.error || 'Failed to resolve location address');
+    }
+    return json.data;
+  },
+
   async getOrder(id: string, token?: string): Promise<Order> {
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -346,6 +366,25 @@ export const api = {
     });
     const json: ApiResponse<void> = await res.json();
     if (!json.success) throw new Error(json.error || 'Failed to delete order history record');
+  },
+
+  async purgeFakeOrders(token: string): Promise<{ purgedCount: number }> {
+    const res = await fetch(`${BASE_URL}/admin/orders/purge-fake`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<{ purgedCount: number }> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to purge fake orders');
+    return json.data;
+  },
+
+  async purgeAllOrders(token: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/admin/orders-purge-all`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json: ApiResponse<void> = await res.json();
+    if (!json.success) throw new Error(json.error || 'Failed to clear all orders');
   },
 
   async registerInvoice(token: string, orderId: string): Promise<any> {

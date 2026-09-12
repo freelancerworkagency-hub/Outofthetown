@@ -48,6 +48,7 @@ interface OrdersManagementProps {
   ) => Promise<void>;
   onDeleteOrder?: (orderId: string) => void;
   onCancelOrder?: (orderId: string, reason?: string) => void;
+  onPurgeAllOrders?: () => void;
   onRefresh: () => void;
   onOpenRevenueAnalysis?: () => void;
   isLoading?: boolean;
@@ -70,6 +71,7 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
   onUpdateOrderStatus,
   onDeleteOrder,
   onCancelOrder,
+  onPurgeAllOrders,
   onRefresh,
   onOpenRevenueAnalysis,
   isLoading = false,
@@ -100,6 +102,10 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
   // Delete Order History Modal State
   const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
   const [isSubmittingDelete, setIsSubmittingDelete] = useState<boolean>(false);
+
+  // Clear All Orders Modal State
+  const [showPurgeModal, setShowPurgeModal] = useState<boolean>(false);
+  const [isSubmittingPurge, setIsSubmittingPurge] = useState<boolean>(false);
 
   // Invoice Download State
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
@@ -265,6 +271,22 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
     }
   };
 
+  // Submit Purge All Orders - Clean Start
+  const handleConfirmPurgeAll = async () => {
+    try {
+      setIsSubmittingPurge(true);
+      await api.purgeAllOrders(token);
+      onPurgeAllOrders?.();
+      onRefresh();
+      setShowPurgeModal(false);
+      showToast('All orders cleared successfully');
+    } catch (err: any) {
+      showToast('Failed to clear orders: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsSubmittingPurge(false);
+    }
+  };
+
   // Download Invoice PDF & Store in Supabase
   const handleDownloadInvoice = async (order: Order) => {
     try {
@@ -325,6 +347,18 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {orders.length > 0 && (
+            <button
+              id="btn-clear-all-orders"
+              onClick={() => setShowPurgeModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-xs font-semibold text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 shadow-xs cursor-pointer transition-all"
+              title="Clear all orders to start completely fresh"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Clear All Orders</span>
+            </button>
+          )}
+
           <button
             id="btn-refresh-orders"
             onClick={onRefresh}
@@ -1424,6 +1458,73 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                   <>
                     <Trash2 className="w-4 h-4" />
                     <span>Delete Record Permanently</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 3B: WIPE ALL ORDERS (START FRESH) */}
+      {/* ============================================================== */}
+      {showPurgeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-md rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-stone-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center font-bold">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-serif font-bold text-stone-900 dark:text-stone-100">
+                    Clear All Orders
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Wipe all {orders.length} order records
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPurgeModal(false)}
+                className="p-2 rounded-xl text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-xs text-rose-900 dark:text-rose-300 space-y-1.5">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>Confirm Database Wipe</span>
+              </p>
+              <p className="text-[11px] leading-relaxed text-rose-800 dark:text-rose-400">
+                This will permanently delete all existing order history so your dashboard only reflects genuine orders placed by live customers moving forward. This cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowPurgeModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-xs font-semibold text-stone-700 dark:text-stone-300 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                id="btn-confirm-purge-all"
+                type="button"
+                disabled={isSubmittingPurge}
+                onClick={handleConfirmPurgeAll}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+              >
+                {isSubmittingPurge ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Yes, Clear All Orders</span>
                   </>
                 )}
               </button>

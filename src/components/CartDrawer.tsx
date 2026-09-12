@@ -14,6 +14,11 @@ import {
   AlertCircle,
   Loader2,
   ShieldCheck,
+  MapPin,
+  LocateFixed,
+  ExternalLink,
+  User,
+  Phone,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -60,6 +65,20 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
 
+  // Google Maps Auto-fetch state
+  const [isLocatingAddress, setIsLocatingAddress] = useState(false);
+  const [locationSuccess, setLocationSuccess] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Field validation error tracking for necessary fields
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string;
+    phone?: string;
+    address?: string;
+    tableNumber?: string;
+  }>({});
+
   // Sync customer details when authenticated
   useEffect(() => {
     if (customer) {
@@ -83,32 +102,106 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
     }
   };
 
+  // Auto-fetch customer address via Google Maps / Geolocation
+  const handleAutoFetchAddress = () => {
+    setLocationError(null);
+    setLocationSuccess(null);
+
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser. Please enter your address manually.');
+      return;
+    }
+
+    setIsLocatingAddress(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          setCoords({ lat, lng });
+
+          const res = await api.reverseGeocodeLocation(lat, lng);
+          if (res && res.formattedAddress) {
+            setDeliveryAddress(res.formattedAddress);
+            setLocationSuccess(
+              res.source === 'google'
+                ? 'Address auto-fetched via Google Maps! You can add apartment/flat details below.'
+                : 'Address auto-fetched via GPS! You can add apartment/flat details below.'
+            );
+            // Clear address error
+            setFieldErrors((prev) => ({ ...prev, address: undefined }));
+            setOrderError(null);
+          } else {
+            setLocationError('Unable to resolve a street address from your GPS location. Please enter it manually.');
+          }
+        } catch (err: any) {
+          setLocationError(err.message || 'Could not fetch address via Google Maps. Please enter manually.');
+        } finally {
+          setIsLocatingAddress(false);
+        }
+      },
+      (error) => {
+        setIsLocatingAddress(false);
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationError('Location permission denied. Please allow location access in your browser or type address manually.');
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          setLocationError('Location information is unavailable on your device. Please enter address manually.');
+        } else if (error.code === error.TIMEOUT) {
+          setLocationError('Location request timed out. Please try again or type address manually.');
+        } else {
+          setLocationError('Failed to retrieve location. Please enter address manually.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+    );
+  };
+
+  const validateRequiredFields = (overrideName?: string, overridePhone?: string): boolean => {
+    const effectiveName = (overrideName || customerName || customer?.name || '').trim();
+    const effectivePhone = (overridePhone || customerPhone || customer?.phone || '').trim();
+    const cleanPhone = effectivePhone.replace(/\D/g, '');
+
+    const errors: { name?: string; phone?: string; address?: string; tableNumber?: string } = {};
+
+    if (!effectiveName || effectiveName.length < 2) {
+      errors.name = 'Full name is required (minimum 2 characters)';
+    }
+
+    if (!effectivePhone || cleanPhone.length < 10) {
+      errors.phone = 'Valid 10-digit phone number is required';
+    }
+
+    if (orderType === 'delivery') {
+      if (!deliveryAddress.trim() || deliveryAddress.trim().length < 5) {
+        errors.address = 'Delivery address is required for doorstep delivery (minimum 5 characters)';
+      }
+    }
+
+    if (orderType === 'dine-in') {
+      if (!tableNumber.trim()) {
+        errors.tableNumber = 'Table number is required for dine-in orders';
+      }
+    }
+
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      setOrderError('Please fill out all necessary required fields (Name, Phone, and Address) before placing order.');
+      return false;
+    }
+
+    return true;
+  };
+
   const executeOrderSubmission = async (overrideName?: string, overridePhone?: string, overrideEmail?: string) => {
     setOrderError(null);
+
+    const isValid = validateRequiredFields(overrideName, overridePhone);
+    if (!isValid) return;
 
     const effectiveName = (overrideName || customerName || customer?.name || '').trim();
     const effectivePhone = (overridePhone || customerPhone || customer?.phone || '').trim();
     const effectiveEmail = (overrideEmail || customerEmail || customer?.email || '').trim();
-
-    if (!effectiveName) {
-      setOrderError('Please enter your full name');
-      return;
-    }
-
-    if (!effectivePhone || effectivePhone.replace(/\D/g, '').length < 8) {
-      setOrderError('Please enter a valid phone number for order updates');
-      return;
-    }
-
-    if (orderType === 'delivery' && !deliveryAddress.trim()) {
-      setOrderError('Please provide a complete delivery address');
-      return;
-    }
-
-    if (orderType === 'dine-in' && !tableNumber.trim()) {
-      setOrderError('Please enter your table number');
-      return;
-    }
 
     try {
       setIsSubmitting(true);
@@ -147,25 +240,22 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
     e.preventDefault();
     setOrderError(null);
 
-    if (orderType === 'delivery' && !deliveryAddress.trim()) {
-      setOrderError('Please provide a complete delivery address');
-      return;
-    }
+    // Strictly validate required fields first before any proceeding
+    const isValid = validateRequiredFields();
+    if (!isValid) return;
 
-    if (orderType === 'dine-in' && !tableNumber.trim()) {
-      setOrderError('Please enter your table number');
-      return;
-    }
+    const effectiveName = (customerName || customer?.name || '').trim();
+    const effectivePhone = (customerPhone || customer?.phone || '').trim();
 
     // Require customer authentication before placing order
     if (!isAuthenticated) {
       requireAuth(() => {
-        executeOrderSubmission();
+        executeOrderSubmission(effectiveName, effectivePhone, customerEmail.trim());
       }, 'order');
       return;
     }
 
-    await executeOrderSubmission();
+    await executeOrderSubmission(effectiveName, effectivePhone, customerEmail.trim());
   };
 
   return (
@@ -284,7 +374,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
                   </button>
                 </div>
 
-                <div className="divide-y divide-stone-100 dark:divide-stone-800 rounded-2xl bg-stone-50 dark:bg-stone-850 p-3 border border-stone-200 dark:border-stone-800">
+                <div className="divide-y divide-stone-100 dark:divide-stone-800 rounded-2xl bg-stone-50 dark:bg-stone-800 p-3 border border-stone-200 dark:border-stone-700">
                   {items.map(({ item, quantity }) => (
                     <div key={item.id} className="py-2.5 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -383,48 +473,207 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
 
               {/* Customer Delivery / Table Info */}
               <div className="space-y-3">
-                <span className="text-xs font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
-                  Contact & Details
-                </span>
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    placeholder="Your Full Name *"
-                    required
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
-                  />
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-amber-600" />
+                    Contact & Delivery Details
+                  </span>
+                  <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800">
+                    * Required fields
+                  </span>
+                </div>
 
-                  <input
-                    type="tel"
-                    placeholder="Phone Number (e.g. +91 98289 19626) *"
-                    required
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
-                  />
+                <div className="space-y-2.5">
+                  {/* Full Name Field */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                        Full Name <span className="text-rose-500 font-bold">*</span>
+                      </label>
+                      {fieldErrors.name && (
+                        <span className="text-[10px] text-rose-500 font-medium animate-pulse">
+                          {fieldErrors.name}
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Your Full Name *"
+                        required
+                        value={customerName}
+                        onChange={(e) => {
+                          setCustomerName(e.target.value);
+                          if (fieldErrors.name) setFieldErrors((p) => ({ ...p, name: undefined }));
+                        }}
+                        className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-stone-50 dark:bg-stone-800 border text-stone-900 dark:text-stone-100 focus:outline-hidden transition-colors ${
+                          fieldErrors.name
+                            ? 'border-rose-500 focus:border-rose-600 bg-rose-50/20'
+                            : 'border-stone-200 dark:border-stone-700 focus:border-amber-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
 
+                  {/* Phone Number Field */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                        Phone Number <span className="text-rose-500 font-bold">*</span>
+                      </label>
+                      {fieldErrors.phone && (
+                        <span className="text-[10px] text-rose-500 font-medium animate-pulse">
+                          {fieldErrors.phone}
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <Phone className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="tel"
+                        placeholder="10-digit mobile number (e.g. 98289 19626) *"
+                        required
+                        value={customerPhone}
+                        onChange={(e) => {
+                          setCustomerPhone(e.target.value);
+                          if (fieldErrors.phone) setFieldErrors((p) => ({ ...p, phone: undefined }));
+                        }}
+                        className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-stone-50 dark:bg-stone-800 border text-stone-900 dark:text-stone-100 focus:outline-hidden transition-colors ${
+                          fieldErrors.phone
+                            ? 'border-rose-500 focus:border-rose-600 bg-rose-50/20'
+                            : 'border-stone-200 dark:border-stone-700 focus:border-amber-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Delivery Address Field & Google Maps Auto-Fetch */}
                   {orderType === 'delivery' && (
-                    <textarea
-                      placeholder="Delivery Street Address, Apt, Floor *"
-                      rows={2}
-                      required
-                      value={deliveryAddress}
-                      onChange={(e) => setDeliveryAddress(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500 resize-none"
-                    />
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5 text-amber-600" />
+                          Delivery Address <span className="text-rose-500 font-bold">*</span>
+                        </label>
+                        {fieldErrors.address && (
+                          <span className="text-[10px] text-rose-500 font-medium animate-pulse">
+                            {fieldErrors.address}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Google Maps Auto-Fetch Button */}
+                      <button
+                        type="button"
+                        onClick={handleAutoFetchAddress}
+                        disabled={isLocatingAddress}
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl border border-amber-300/80 dark:border-amber-700/60 bg-gradient-to-r from-amber-50 via-orange-50/60 to-amber-50 dark:from-amber-950/40 dark:via-stone-900 dark:to-amber-950/30 text-amber-950 dark:text-amber-200 hover:border-amber-500 transition-all text-xs font-semibold cursor-pointer shadow-2xs group"
+                      >
+                        <div className="flex items-center gap-2 text-left">
+                          {isLocatingAddress ? (
+                            <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/80 text-amber-700">
+                              <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+                            </div>
+                          ) : (
+                            <div className="p-1.5 rounded-lg bg-amber-200/80 dark:bg-amber-900/80 text-amber-800 dark:text-amber-200 group-hover:scale-105 transition-transform">
+                              <MapPin className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+                            </div>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-[11px] sm:text-xs text-amber-900 dark:text-amber-100">
+                                {isLocatingAddress ? 'Locating via Google Maps...' : 'Auto-Fetch via Google Map'}
+                              </span>
+                              <span className="px-1.5 py-0.5 bg-emerald-600 text-white rounded text-[9px] font-bold tracking-wide uppercase">
+                                Instant
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-stone-500 dark:text-stone-400 font-normal">
+                              Fetch your doorstep location via GPS & Google Maps
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 text-amber-600 font-medium text-[11px] shrink-0">
+                          <LocateFixed className="w-4 h-4 group-hover:rotate-45 transition-transform" />
+                        </div>
+                      </button>
+
+                      {/* Location detection success or notice */}
+                      {locationSuccess && (
+                        <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-400/80 text-emerald-800 dark:text-emerald-300 text-[11px] flex items-start gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-600" />
+                          <div className="flex-1">
+                            <span>{locationSuccess}</span>
+                            {coords && (
+                              <a
+                                href={`https://www.google.com/maps?q=${coords.lat},${coords.lng}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-0.5 ml-1.5 text-emerald-700 dark:text-emerald-300 underline font-semibold hover:text-emerald-900"
+                              >
+                                <span>View Map</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {locationError && (
+                        <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-400 text-amber-800 dark:text-amber-300 text-[11px] flex items-start gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />
+                          <span className="flex-1">{locationError}</span>
+                        </div>
+                      )}
+
+                      <textarea
+                        placeholder="House/Flat No., Building Name, Street, Landmark, Area *"
+                        rows={2}
+                        required
+                        value={deliveryAddress}
+                        onChange={(e) => {
+                          setDeliveryAddress(e.target.value);
+                          if (fieldErrors.address) setFieldErrors((p) => ({ ...p, address: undefined }));
+                        }}
+                        className={`w-full px-3 py-2 text-xs rounded-xl bg-stone-50 dark:bg-stone-800 border text-stone-900 dark:text-stone-100 focus:outline-hidden transition-colors resize-none ${
+                          fieldErrors.address
+                            ? 'border-rose-500 focus:border-rose-600 bg-rose-50/20'
+                            : 'border-stone-200 dark:border-stone-700 focus:border-amber-500'
+                        }`}
+                      />
+                    </div>
                   )}
 
+                  {/* Dine-in Table Number Field */}
                   {orderType === 'dine-in' && (
-                    <input
-                      type="text"
-                      placeholder="Table Number (e.g. Table 4 / Patio 2) *"
-                      required
-                      value={tableNumber}
-                      onChange={(e) => setTableNumber(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
-                    />
+                    <div className="space-y-1 pt-1">
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[11px] font-semibold text-stone-700 dark:text-stone-300">
+                          Table Number <span className="text-rose-500 font-bold">*</span>
+                        </label>
+                        {fieldErrors.tableNumber && (
+                          <span className="text-[10px] text-rose-500 font-medium animate-pulse">
+                            {fieldErrors.tableNumber}
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Table Number (e.g. Table 4 / Patio 2) *"
+                        required
+                        value={tableNumber}
+                        onChange={(e) => {
+                          setTableNumber(e.target.value);
+                          if (fieldErrors.tableNumber) setFieldErrors((p) => ({ ...p, tableNumber: undefined }));
+                        }}
+                        className={`w-full px-3 py-2 text-xs rounded-xl bg-stone-50 dark:bg-stone-800 border text-stone-900 dark:text-stone-100 focus:outline-hidden transition-colors ${
+                          fieldErrors.tableNumber
+                            ? 'border-rose-500 focus:border-rose-600 bg-rose-50/20'
+                            : 'border-stone-200 dark:border-stone-700 focus:border-amber-500'
+                        }`}
+                      />
+                    </div>
                   )}
                 </div>
               </div>
@@ -472,7 +721,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess }) => {
               </div>
 
               {/* Bill Details Breakdown */}
-              <div className="rounded-2xl bg-stone-50 dark:bg-stone-850 p-4 border border-stone-200 dark:border-stone-800 space-y-2 text-xs">
+              <div className="rounded-2xl bg-stone-50 dark:bg-stone-800 p-4 border border-stone-200 dark:border-stone-700 space-y-2 text-xs">
                 <h4 className="font-bold text-stone-800 dark:text-stone-200 uppercase tracking-wider text-[11px] mb-2">
                   Bill Summary
                 </h4>

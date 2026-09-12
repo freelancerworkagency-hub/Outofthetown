@@ -16,6 +16,32 @@ let cachedActiveTables: Set<string> | null = null;
 let lastTableCheckTime = 0;
 const CACHE_TTL_MS = 15000; // 15 seconds
 
+export const FAKE_ORDER_IDS = new Set(['ORD-8925', 'ORD-8924', 'ORD-8921', 'ORD-8920', 'ORD-8918']);
+export const FAKE_CUSTOMER_NAMES = new Set([
+  'Kabir Verma',
+  'Meenakshi Rathore',
+  'Aarav Sharma',
+  'Priya Meena',
+  'Rohan Deshmukh',
+]);
+
+export function isFakeOrder(order: { id?: string; customerName?: string; customer_name?: string }): boolean {
+  if (order.id && FAKE_ORDER_IDS.has(order.id)) return true;
+  const name = order.customerName || order.customer_name;
+  if (name && FAKE_CUSTOMER_NAMES.has(name)) return true;
+  return false;
+}
+
+export const FAKE_RESV_IDS = new Set(['RES-5011', 'RES-5012']);
+export const FAKE_RESV_NAMES = new Set(['Rohit Khandelwal', 'Neha Rathore']);
+
+export function isFakeReservation(resv: { id?: string; customerName?: string; customer_name?: string }): boolean {
+  if (resv.id && FAKE_RESV_IDS.has(resv.id)) return true;
+  const name = resv.customerName || resv.customer_name;
+  if (name && FAKE_RESV_NAMES.has(name)) return true;
+  return false;
+}
+
 export function isTableMissingError(error: any): boolean {
   if (!error) return false;
   const msg = String(error.message || '').toLowerCase();
@@ -951,33 +977,37 @@ export class SupabaseService {
         }
       }
 
-      // 4. Orders
+      // 4. Orders (Strictly genuine customer orders only)
       if (activeTables.has('orders')) {
         const dbOrders = await SupabaseService.fetchOrders();
         if (dbOrders && dbOrders.length > 0) {
-          const sbIds = new Set(dbOrders.map((o) => o.id));
-          const localRemaining = store.orders.filter((o: Order) => !sbIds.has(o.id));
-          store.orders = [...dbOrders, ...localRemaining];
-          console.log(`[Supabase] Loaded ${dbOrders.length} orders from database.`);
-        } else if (store.orders && store.orders.length > 0) {
-          for (const ord of store.orders) {
-            await SupabaseService.saveOrder(ord);
+          // Remove any lingering fake orders from Supabase table
+          const fakeOrders = dbOrders.filter(isFakeOrder);
+          for (const fake of fakeOrders) {
+            await SupabaseService.deleteOrder(fake.id).catch(() => {});
           }
+          const realOrders = dbOrders.filter((o) => !isFakeOrder(o));
+          const sbIds = new Set(realOrders.map((o) => o.id));
+          const localRemaining = store.orders.filter((o: Order) => !sbIds.has(o.id) && !isFakeOrder(o));
+          store.orders = [...realOrders, ...localRemaining];
+          console.log(`[Supabase] Loaded ${realOrders.length} real orders from database.`);
         }
       }
 
-      // 5. Reservations
+      // 5. Reservations (Strictly genuine customer reservations only)
       if (activeTables.has('reservations')) {
         const dbReservations = await SupabaseService.fetchReservations();
         if (dbReservations && dbReservations.length > 0) {
-          const sbIds = new Set(dbReservations.map((r) => r.id));
-          const localRemaining = store.reservations.filter((r: Reservation) => !sbIds.has(r.id));
-          store.reservations = [...dbReservations, ...localRemaining];
-          console.log(`[Supabase] Loaded ${dbReservations.length} reservations from database.`);
-        } else if (store.reservations && store.reservations.length > 0) {
-          for (const resv of store.reservations) {
-            await SupabaseService.saveReservation(resv);
+          // Remove any lingering fake reservations from Supabase table
+          const fakeResvs = dbReservations.filter(isFakeReservation);
+          for (const fake of fakeResvs) {
+            await SupabaseService.deleteReservation(fake.id).catch(() => {});
           }
+          const realResvs = dbReservations.filter((r) => !isFakeReservation(r));
+          const sbIds = new Set(realResvs.map((r) => r.id));
+          const localRemaining = store.reservations.filter((r: Reservation) => !sbIds.has(r.id) && !isFakeReservation(r));
+          store.reservations = [...realResvs, ...localRemaining];
+          console.log(`[Supabase] Loaded ${realResvs.length} real reservations from database.`);
         }
       }
 
