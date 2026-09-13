@@ -37,6 +37,76 @@ export type OrderType = 'delivery' | 'pickup' | 'dine-in';
 export type OrderStatus = 'pending' | 'accepted' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
 export type PaymentMethod = 'cash' | 'card' | 'upi' | 'counter';
 
+export type DeliveryPartnerVehicle = 'bike' | 'scooter' | 'van' | 'electric_ev';
+
+export type DeliveryTrackingStage =
+  | 'assigned'
+  | 'arrived_at_pickup'
+  | 'picked_up'
+  | 'on_the_way'
+  | 'near_destination'
+  | 'delivered';
+
+export interface DeliveryPartner {
+  id: string;
+  name: string;
+  phone: string;
+  vehicleType: DeliveryPartnerVehicle;
+  vehicleNumber: string;
+  rating: number;
+  totalDeliveries: number;
+  photoUrl?: string;
+  batteryLevel?: number;
+}
+
+export interface DeliveryWaypoint {
+  id: string;
+  name: string;
+  landmark: string;
+  distanceKm: number;
+  completed: boolean;
+  active: boolean;
+  timeEstimate?: string;
+}
+
+export interface DeliveryTimelineItem {
+  stage: DeliveryTrackingStage;
+  title: string;
+  description: string;
+  timestamp: string;
+  completed: boolean;
+}
+
+export interface DeliveryTracking {
+  partner: DeliveryPartner;
+  stage: DeliveryTrackingStage;
+  statusNotes?: string;
+  assignedAt: string;
+  arrivedAtPickupAt?: string;
+  pickedUpAt?: string;
+  deliveredAt?: string;
+  estimatedDeliveryMinutes: number;
+  estimatedArrivalTime: string; // e.g. "08:15 PM"
+  progressPercent: number; // 0 to 100 for GPS position along NH-48 route
+  currentLocationLabel: string;
+  pickupLocation: {
+    name: string;
+    address: string;
+    phone: string;
+    lat: number;
+    lng: number;
+  };
+  deliveryLocation: {
+    customerName: string;
+    address: string;
+    phone: string;
+    lat?: number;
+    lng?: number;
+  };
+  waypoints: DeliveryWaypoint[];
+  timeline: DeliveryTimelineItem[];
+}
+
 export interface OrderItem {
   menuItemId: string;
   name: string;
@@ -88,6 +158,8 @@ export interface Order {
   isCustomCake?: boolean;
   customCakeDetails?: CustomCakeDetails;
   specialInstructions?: string;
+  deliveryPartner?: DeliveryPartner;
+  deliveryTracking?: DeliveryTracking;
 }
 
 export type SeatingArea = 'indoor_lounge' | 'garden_patio' | 'window_nook' | 'chef_counter';

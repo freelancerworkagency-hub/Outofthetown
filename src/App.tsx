@@ -304,6 +304,10 @@ function CafeHome() {
               }}
               isOfferDetailView={Boolean(selectedOfferBanner)}
               isScrolled={isScrolled}
+              categories={categories}
+              activeCategory={activeCategory}
+              onSelectCategory={setActiveCategory}
+              itemsCountByCategory={itemsCountByCategory}
             />
           </motion.div>
         )}
@@ -344,13 +348,48 @@ function CafeHome() {
           />
 
           {/* Food Categories smoothly positioned on the clean white transition */}
-          <div className="relative z-20 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 -mt-6 sm:-mt-8 mb-2 sm:mb-4">
+          <div className="relative z-20 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 -mt-6 sm:-mt-8 mb-2 sm:mb-4 space-y-2.5">
             <CategoryPills
               categories={categories}
               activeCategory={activeCategory}
               onSelectCategory={setActiveCategory}
               itemsCountByCategory={itemsCountByCategory}
             />
+
+            {/* Filter Bar directly overlapping the background, smoothly scrollable without enclosing box or side indicators */}
+            <div className="w-full pt-0.5">
+              <FilterBar
+                vegOnly={vegOnly}
+                onToggleVegOnly={() => {
+                  const nextVeg = !vegOnly;
+                  setVegOnly(nextVeg);
+                  if (nextVeg) setNonVegOnly(false);
+                }}
+                nonVegOnly={nonVegOnly}
+                onToggleNonVegOnly={() => {
+                  setNonVegOnly(!nonVegOnly);
+                  if (!nonVegOnly) setVegOnly(false);
+                }}
+                bestsellerOnly={bestsellerOnly}
+                onToggleBestseller={() => setBestsellerOnly(!bestsellerOnly)}
+                ratingOnly={ratingOnly}
+                onToggleRating={() => setRatingOnly(!ratingOnly)}
+                offersOnly={offersOnly}
+                onToggleOffers={() => setOffersOnly(!offersOnly)}
+                quickPrepOnly={quickPrepOnly}
+                onToggleQuickPrep={() => setQuickPrepOnly(!quickPrepOnly)}
+                maxPrice={maxPrice}
+                onSelectMaxPrice={setMaxPrice}
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+                onClearAllFilters={handleClearAllFilters}
+                totalFiltered={filteredItems.length}
+                isSticky={false}
+                idPrefix="main"
+                className="my-0 py-0"
+                showIndicatorButtons={true}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -372,7 +411,7 @@ function CafeHome() {
         ) : (
           <>
             {/* Section Heading with scroll margin offset for sticky header */}
-            <div id="menu-heading" className="flex items-center justify-between mb-5 mt-2 scroll-mt-36">
+            <div id="menu-heading" className="flex items-center justify-between gap-3 mb-5 mt-2 scroll-mt-48">
               <div>
                 <h2 className="text-xl sm:text-2xl font-serif font-bold text-stone-900 dark:text-stone-100">
                   {activeCategory === 'all'
@@ -384,15 +423,23 @@ function CafeHome() {
                 </p>
               </div>
 
-              {/* Quick trigger button for custom bakery items */}
-              <button
-                id="btn-quick-custom-cake"
-                onClick={() => setIsCustomCakeOpen(true)}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-transparent hover:from-rose-500/20 hover:via-amber-500/20 text-rose-700 dark:text-rose-300 border border-rose-300/60 dark:border-rose-800/60 text-xs font-bold transition-all hover:scale-102 active:scale-98 cursor-pointer"
-              >
-                <Cake className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                <span>Request Custom Cake</span>
-              </button>
+              {/* Actions on the side: Small Download Menu button & Custom Cake trigger */}
+              <div className="flex items-center gap-2 shrink-0">
+                <MenuPdfDownloadSection
+                  menuItems={menuItems}
+                  categories={categories}
+                  cafeInfo={cafeInfo}
+                />
+
+                <button
+                  id="btn-quick-custom-cake"
+                  onClick={() => setIsCustomCakeOpen(true)}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-transparent hover:from-rose-500/20 hover:via-amber-500/20 text-rose-700 dark:text-rose-300 border border-rose-300/60 dark:border-rose-800/60 text-xs font-bold transition-all hover:scale-102 active:scale-98 cursor-pointer"
+                >
+                  <Cake className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                  <span>Request Custom Cake</span>
+                </button>
+              </div>
             </div>
 
             {/* Custom Cake / Made-to-Order Banner (Highlight when in Bakery or All) */}
@@ -504,13 +551,6 @@ function CafeHome() {
                 </AnimatePresence>
               </motion.div>
             )}
-
-            {/* Download Complete Menu in PDF Format */}
-            <MenuPdfDownloadSection
-              menuItems={menuItems}
-              categories={categories}
-              cafeInfo={cafeInfo}
-            />
 
             {/* Reserve Table Interactive Feature Banner */}
             <div className="mt-14 rounded-3xl bg-gradient-to-r from-stone-900 via-amber-950/60 to-stone-900 text-white p-6 sm:p-10 border border-amber-900/40 shadow-xl relative overflow-hidden">

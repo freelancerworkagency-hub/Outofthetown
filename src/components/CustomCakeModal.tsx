@@ -659,6 +659,31 @@ export const CustomCakeModal: React.FC<CustomCakeModalProps> = ({ isOpen, onClos
                   placeholder="Describe colors (e.g. pastel lilac and gold leaf), frosting style (vintage Lambeth, semi-naked, fresh floral drip), toppers, figurine ideas, or special dietary notes..."
                   className="w-full text-xs rounded-2xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 p-3 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-amber-500 leading-relaxed"
                 />
+
+                {/* Call the Restaurant Directly Button */}
+                <div className="mt-2.5 p-3 rounded-xl bg-amber-50/90 dark:bg-stone-800/90 border border-amber-200 dark:border-stone-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0">
+                      <Phone className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-stone-900 dark:text-stone-100">
+                        Prefer to discuss your cake directly?
+                      </p>
+                      <p className="text-[10px] text-stone-500 dark:text-stone-400">
+                        Call our bakery kitchen to discuss custom artwork, tiers or urgent orders.
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    id="call-restaurant-cake-btn"
+                    href="tel:+919828919626"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs hover:shadow-sm transition-all shrink-0 cursor-pointer active:scale-98"
+                  >
+                    <Phone className="w-3 h-3" />
+                    <span>Call Restaurant (+91 98289 19626)</span>
+                  </a>
+                </div>
               </div>
 
               {/* Message on Cake */}

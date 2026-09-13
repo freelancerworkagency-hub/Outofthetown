@@ -14,6 +14,8 @@ import {
 import { useCart } from '../context/CartContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { FilterBar, FilterBarProps } from './FilterBar.js';
+import type { Category } from '../types.js';
+import { CategoryPills } from './CategoryPills.js';
 
 export interface NavbarProps extends Omit<FilterBarProps, 'isSticky'> {
   searchQuery: string;
@@ -25,6 +27,10 @@ export interface NavbarProps extends Omit<FilterBarProps, 'isSticky'> {
   onOpenCustomCake?: () => void;
   isOfferDetailView?: boolean;
   isScrolled?: boolean;
+  categories?: Category[];
+  activeCategory?: string;
+  onSelectCategory?: (slug: string) => void;
+  itemsCountByCategory?: Record<string, number>;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -53,6 +59,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenCustomCake,
   isOfferDetailView = false,
   isScrolled = false,
+  categories,
+  activeCategory,
+  onSelectCategory,
+  itemsCountByCategory = {},
 }) => {
   const { totalItemsCount, total, setIsCartOpen } = useCart();
   const { customer, isAuthenticated } = useAuth();
@@ -286,7 +296,28 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* ROW 2: ZOMATO STICKY FILTER BAR (Filters, Sort, Pure Veg, Non Veg, Rating 4.5+, etc.) */}
+      {/* ROW 2: STICKY FOOD CATEGORIES TAB (Round images with text below just like Zomato mobile app) */}
+      {!isOfferDetailView && categories && categories.length > 0 && onSelectCategory && (
+        <div className="w-full max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 border-t border-stone-100 dark:border-stone-800/80 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md py-1">
+          <CategoryPills
+            categories={categories}
+            activeCategory={activeCategory || 'all'}
+            onSelectCategory={(slug) => {
+              onSelectCategory(slug);
+              const heading = document.getElementById('menu-heading');
+              if (heading) {
+                heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }}
+            itemsCountByCategory={itemsCountByCategory}
+            idPrefix="sticky"
+            className="my-0 py-0.5"
+            compact={true}
+          />
+        </div>
+      )}
+
+      {/* ROW 3: ZOMATO STICKY FILTER BAR (Filters, Sort, Pure Veg, Non Veg, Rating 4.5+, etc.) */}
       {!isOfferDetailView && (
         <div className="w-full max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 border-t border-stone-100 dark:border-stone-800/80">
           <FilterBar
@@ -309,6 +340,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClearAllFilters={onClearAllFilters}
             totalFiltered={totalFiltered}
             isSticky={true}
+            idPrefix="sticky"
           />
         </div>
       )}

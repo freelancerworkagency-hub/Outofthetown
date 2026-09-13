@@ -1,4 +1,14 @@
-import type { MenuItem, Category, Order, Reservation, PromoBanner, CafeInfo, Customer } from '../types.js';
+import type {
+  MenuItem,
+  Category,
+  Order,
+  Reservation,
+  PromoBanner,
+  CafeInfo,
+  Customer,
+  DeliveryPartner,
+  DeliveryTrackingStage,
+} from '../types.js';
 
 const BASE_URL = '/api';
 
@@ -243,6 +253,52 @@ export const api = {
     });
     const json: ApiResponse<Order> = await res.json();
     if (!json.success || !json.data) throw new Error(json.error || 'Failed to update order');
+    return json.data;
+  },
+
+  async assignDeliveryPartner(
+    token: string,
+    orderId: string,
+    payload: {
+      partner: DeliveryPartner;
+      estimatedMinutes?: number;
+      notes?: string;
+      initialStage?: DeliveryTrackingStage;
+    }
+  ): Promise<Order> {
+    const res = await fetch(`${BASE_URL}/admin/orders/${orderId}/assign-delivery`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const json: ApiResponse<Order> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to assign delivery partner');
+    return json.data;
+  },
+
+  async updateDeliveryStage(
+    token: string,
+    orderId: string,
+    payload: {
+      stage: DeliveryTrackingStage;
+      notes?: string;
+      progressPercent?: number;
+      currentLocationLabel?: string;
+    }
+  ): Promise<Order> {
+    const res = await fetch(`${BASE_URL}/admin/orders/${orderId}/delivery-stage`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const json: ApiResponse<Order> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to update delivery stage');
     return json.data;
   },
 

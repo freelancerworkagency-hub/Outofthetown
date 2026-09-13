@@ -29,10 +29,21 @@ import {
   Hash,
   Database,
   Cake,
+  Navigation,
+  Send,
 } from 'lucide-react';
-import type { Order, OrderStatus, OrderType, CafeInfo } from '../../types.js';
+import type {
+  Order,
+  OrderStatus,
+  OrderType,
+  CafeInfo,
+  DeliveryPartner,
+  DeliveryTrackingStage,
+} from '../../types.js';
 import { api } from '../../services/api.js';
 import { generateOrderInvoicePdf } from '../../utils/invoicePdf.js';
+import { STAGE_CONFIG } from '../../utils/deliveryFleet.js';
+import { AssignDeliveryPartnerModal } from './AssignDeliveryPartnerModal.js';
 
 interface OrdersManagementProps {
   orders: Order[];
@@ -116,9 +127,48 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
   // Notification Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Delivery Partner Assignment State
+  const [assigningDeliveryOrder, setAssigningDeliveryOrder] = useState<Order | null>(null);
+  const [updatingDeliveryOrderId, setUpdatingDeliveryOrderId] = useState<string | null>(null);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleAssignDeliveryPartner = async (data: {
+    partner: DeliveryPartner;
+    estimatedMinutes: number;
+    notes: string;
+    initialStage: DeliveryTrackingStage;
+  }) => {
+    if (!assigningDeliveryOrder) return;
+    try {
+      await api.assignDeliveryPartner(token, assigningDeliveryOrder.id, data);
+      showToast(`Assigned ${data.partner.name} to Order #${assigningDeliveryOrder.id}`);
+      onRefresh();
+    } catch (err: any) {
+      showToast(`Failed: ${err.message || 'Error assigning delivery partner'}`);
+      throw err;
+    }
+  };
+
+  const handleUpdateDeliveryStage = async (
+    orderId: string,
+    stage: DeliveryTrackingStage,
+    notes?: string
+  ) => {
+    try {
+      setUpdatingDeliveryOrderId(orderId);
+      await api.updateDeliveryStage(token, orderId, { stage, notes });
+      const stageName = STAGE_CONFIG[stage]?.label || stage;
+      showToast(`Updated to stage: ${stageName}`);
+      onRefresh();
+    } catch (err: any) {
+      showToast(`Failed: ${err.message || 'Error updating delivery stage'}`);
+    } finally {
+      setUpdatingDeliveryOrderId(null);
+    }
   };
 
   // Toggle single order expand / collapse
@@ -713,6 +763,23 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                       </span>
                     )}
 
+                    {/* Delivery Partner Status Badge */}
+                    {(ord.orderType === 'delivery' || ord.deliveryAddress) && (
+                      ord.deliveryPartner ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 dark:bg-purple-950 dark:text-purple-300 ring-1 ring-purple-400/50 flex items-center gap-1">
+                          <Bike className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                          <span>
+                            {ord.deliveryPartner.name} • {STAGE_CONFIG[ord.deliveryTracking?.stage || 'assigned']?.label || 'Assigned'}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 flex items-center gap-1">
+                          <Bike className="w-3 h-3 text-amber-600" />
+                          <span>Unassigned Rider</span>
+                        </span>
+                      )
+                    )}
+
                     {/* Status Pill */}
                     <span
                       className={`text-[11px] uppercase font-bold px-2.5 py-1 rounded-full shrink-0 flex items-center gap-1 ${
@@ -953,6 +1020,199 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
                             </div>
                           </div>
                         </div>
+                      </div>
+                    )}
+
+                    {/* ============================================================== */}
+                    {/* DEDICATED DELIVERY PARTNER ASSIGNMENT & PICKUP / TRANSIT BLOCK */}
+                    {/* ============================================================== */}
+                    {(ord.orderType === 'delivery' || ord.deliveryAddress) && (
+                      <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-500/5 via-stone-50 to-amber-500/5 dark:from-purple-950/20 dark:via-stone-900 dark:to-amber-950/20 border border-purple-200/80 dark:border-purple-900/50 shadow-xs space-y-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-purple-200/50 dark:border-purple-900/40">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
+                              <Bike className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-purple-950 dark:text-purple-300">
+                                  Delivery Fleet Dispatch &amp; Route Tracking
+                                </h4>
+                                <span className="text-[10px] px-2 py-0.2 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold border border-purple-300/40">
+                                  NH-48 Kukas Corridor
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                                Pickup from OTT Restaurant kitchen counter to customer doorstep
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Reassign / Assign Button */}
+                          <button
+                            type="button"
+                            onClick={() => setAssigningDeliveryOrder(ord)}
+                            className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all active:scale-95"
+                          >
+                            <Bike className="w-3.5 h-3.5" />
+                            <span>{ord.deliveryPartner ? 'Reassign / Edit Fleet' : 'Assign Delivery Partner'}</span>
+                          </button>
+                        </div>
+
+                        {!ord.deliveryPartner ? (
+                          /* Not Assigned State */
+                          <div className="p-4 rounded-xl bg-white dark:bg-stone-850 border border-dashed border-amber-300 dark:border-amber-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                <AlertCircle className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-stone-900 dark:text-stone-100">
+                                  Awaiting Rider Assignment
+                                </p>
+                                <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                                  Assign an OTT rider so the kitchen can dispatch food and the customer can track pickup and live transit.
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setAssigningDeliveryOrder(ord)}
+                              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1.5 shrink-0"
+                            >
+                              <Bike className="w-4 h-4" />
+                              <span>Assign Rider Now</span>
+                            </button>
+                          </div>
+                        ) : (
+                          /* Assigned Delivery Partner Details & Stage Stepper */
+                          <div className="space-y-3.5">
+                            {/* Rider Information Header Card */}
+                            <div className="p-3.5 rounded-xl bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-800 flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={
+                                    ord.deliveryPartner.photoUrl ||
+                                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'
+                                  }
+                                  alt={ord.deliveryPartner.name}
+                                  referrerPolicy="no-referrer"
+                                  className="w-11 h-11 rounded-xl object-cover border border-purple-200 dark:border-purple-800 shrink-0 shadow-2xs"
+                                />
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <h5 className="font-bold text-sm text-stone-900 dark:text-stone-100">
+                                      {ord.deliveryPartner.name}
+                                    </h5>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold uppercase">
+                                      OTT Fleet
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-0.5 text-xs text-stone-600 dark:text-stone-400">
+                                    <span className="font-mono font-semibold uppercase">
+                                      {ord.deliveryPartner.vehicleNumber} ({ord.deliveryPartner.vehicleType})
+                                    </span>
+                                    <span>•</span>
+                                    <span className="text-amber-600 font-semibold">⭐ {ord.deliveryPartner.rating}</span>
+                                    <span>•</span>
+                                    <span>{ord.deliveryPartner.totalDeliveries}+ trips</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Rider Contact Actions */}
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={`tel:${ord.deliveryPartner.phone}`}
+                                  className="px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                                >
+                                  <Phone className="w-3.5 h-3.5 text-stone-500" />
+                                  <span>{ord.deliveryPartner.phone}</span>
+                                </a>
+                                <a
+                                  href={`https://wa.me/91${ord.deliveryPartner.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                                    `Hello ${ord.deliveryPartner.name}, regarding OTT Order #${ord.id} for ${ord.customerName}. Status update needed.`
+                                  )}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors"
+                                >
+                                  <Send className="w-3.5 h-3.5" />
+                                  <span>WhatsApp</span>
+                                </a>
+                              </div>
+                            </div>
+
+                            {/* Live Stage & Progress Visualizer */}
+                            <div className="p-3.5 rounded-xl bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-800 space-y-3">
+                              <div className="flex items-center justify-between text-xs">
+                                <div>
+                                  <span className="text-[10px] uppercase font-bold text-stone-400 block">
+                                    Current Live Status
+                                  </span>
+                                  <p className="font-bold text-purple-900 dark:text-purple-300 text-sm">
+                                    {STAGE_CONFIG[ord.deliveryTracking?.stage || 'assigned']?.label || 'Assigned'}
+                                  </p>
+                                  <p className="text-[11px] text-stone-500 mt-0.5">
+                                    {ord.deliveryTracking?.currentLocationLabel || 'Dispatched on highway route'}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-[10px] uppercase font-bold text-stone-400 block">
+                                    ETA Window
+                                  </span>
+                                  <span className="font-mono font-bold text-xs text-amber-600 dark:text-amber-400">
+                                    {ord.deliveryTracking?.estimatedArrivalTime || '25 mins'}
+                                  </span>
+                                  <span className="text-[10px] text-stone-400 block">
+                                    Progress: {ord.deliveryTracking?.progressPercent || 15}%
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Progress bar */}
+                              <div className="w-full bg-stone-100 dark:bg-stone-800 h-2 rounded-full overflow-hidden">
+                                <div
+                                  className="bg-purple-600 h-full rounded-full transition-all duration-500"
+                                  style={{ width: `${ord.deliveryTracking?.progressPercent || 15}%` }}
+                                />
+                              </div>
+
+                              {/* Quick Stage Progression Stepper for Admin */}
+                              <div className="pt-2 border-t border-stone-100 dark:border-stone-800">
+                                <span className="text-[10px] uppercase font-bold text-stone-400 block mb-2">
+                                  Quick Stage Advance (Dispatches Live GPS to Customer)
+                                </span>
+                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                                  {[
+                                    { stage: 'arrived_at_pickup' as DeliveryTrackingStage, label: '1. At Kitchen' },
+                                    { stage: 'picked_up' as DeliveryTrackingStage, label: '2. Picked Up' },
+                                    { stage: 'on_the_way' as DeliveryTrackingStage, label: '3. En Route (NH-48)' },
+                                    { stage: 'near_destination' as DeliveryTrackingStage, label: '4. In Locality' },
+                                    { stage: 'delivered' as DeliveryTrackingStage, label: '5. Delivered' },
+                                  ].map((s) => {
+                                    const isCurrent = ord.deliveryTracking?.stage === s.stage;
+                                    return (
+                                      <button
+                                        key={s.stage}
+                                        type="button"
+                                        disabled={updatingDeliveryOrderId === ord.id}
+                                        onClick={() => handleUpdateDeliveryStage(ord.id, s.stage)}
+                                        className={`px-2 py-1.5 rounded-lg text-[11px] font-bold text-center transition-all cursor-pointer ${
+                                          isCurrent
+                                            ? 'bg-purple-600 text-white shadow-xs'
+                                            : 'bg-stone-100 dark:bg-stone-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700'
+                                        }`}
+                                      >
+                                        {s.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1733,6 +1993,16 @@ export const OrdersManagement: React.FC<OrdersManagementProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Assign Delivery Partner Modal */}
+      {assigningDeliveryOrder && (
+        <AssignDeliveryPartnerModal
+          isOpen={Boolean(assigningDeliveryOrder)}
+          order={assigningDeliveryOrder}
+          onClose={() => setAssigningDeliveryOrder(null)}
+          onAssign={handleAssignDeliveryPartner}
+        />
       )}
     </div>
   );

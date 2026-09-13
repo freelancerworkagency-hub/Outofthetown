@@ -27,6 +27,7 @@ import {
   VolumeX,
   Printer,
   Database,
+  Cake,
 } from 'lucide-react';
 import { api } from '../../services/api.js';
 import type { MenuItem, PromoBanner, Order, Reservation, CafeInfo, OrderStatus, Category } from '../../types.js';
@@ -34,6 +35,7 @@ import { OrdersManagement } from './OrdersManagement.js';
 import { RevenueAnalysis } from './RevenueAnalysis.js';
 import { KitchenOrderTicket } from './KitchenOrderTicket.js';
 import { CategoryManagementView } from './CategoryManagementView.js';
+import { CustomCakesManagement } from './CustomCakesManagement.js';
 import { bellSound } from '../../utils/sound.js';
 
 interface AdminDashboardProps {
@@ -50,7 +52,7 @@ interface AdminDashboardProps {
   onMenuUpdated?: () => void;
 }
 
-type AdminTab = 'orders' | 'reservations' | 'menu' | 'categories' | 'banners' | 'revenue' | 'settings';
+type AdminTab = 'orders' | 'reservations' | 'cakes' | 'menu' | 'categories' | 'banners' | 'revenue' | 'settings';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   token,
@@ -763,6 +765,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
 
           <button
+            id="admin-tab-cakes-btn"
+            onClick={() => setActiveTab('cakes')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 cursor-pointer ${
+              activeTab === 'cakes'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+            }`}
+          >
+            <Cake className="w-4 h-4" />
+            <span>Custom Cakes &amp; Bakery</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 text-white font-mono">
+              {orders.filter(
+                (o) =>
+                  o.isCustomCake ||
+                  !!o.customCakeDetails ||
+                  o.items?.some(
+                    (i) =>
+                      i.menuItemId === 'custom-cake-preorder' ||
+                      i.name?.toLowerCase().includes('custom cake') ||
+                      i.name?.toLowerCase().includes('made-to-order cake')
+                  )
+              ).length}
+            </span>
+            {orders.some(
+              (o) =>
+                (o.isCustomCake ||
+                  !!o.customCakeDetails ||
+                  o.items?.some((i) => i.menuItemId === 'custom-cake-preorder')) &&
+                o.status === 'pending'
+            ) && (
+              <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('menu')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 cursor-pointer ${
               activeTab === 'menu'
@@ -933,6 +970,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 2.5: CUSTOM CAKE & CELEBRATION BAKERY MANAGEMENT */}
+        {/* ============================================================== */}
+        {activeTab === 'cakes' && (
+          <CustomCakesManagement
+            orders={orders}
+            token={token}
+            onUpdateOrderStatus={handleUpdateOrderStatus}
+            onDeleteOrder={handleDeleteOrder}
+            onCancelOrder={handleCancelOrder}
+            onRefresh={loadAllData}
+            isLoading={isLoading}
+            cafeInfo={cafeInfo}
+            onNewOrderCreated={(newOrd) => {
+              setOrders((prev) => [newOrd, ...prev]);
+              showNotification(`New custom cake order #${newOrd.id} logged!`);
+            }}
+          />
         )}
 
         {/* ============================================================== */}

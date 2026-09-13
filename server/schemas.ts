@@ -148,6 +148,35 @@ export const UpdateOrderStatusSchema = z.object({
   estimatedTimeMinutes: z.number().int().min(1).max(180).optional(),
 });
 
+export const DeliveryPartnerSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  phone: z.string().min(8),
+  vehicleType: z.enum(['bike', 'scooter', 'van', 'electric_ev']).default('bike'),
+  vehicleNumber: z.string().min(1),
+  rating: z.number().min(1).max(5).default(4.9),
+  totalDeliveries: z.number().int().min(0).default(100),
+  photoUrl: z.string().optional(),
+  batteryLevel: z.number().optional(),
+});
+
+export const AssignDeliveryPartnerSchema = z.object({
+  partner: DeliveryPartnerSchema,
+  estimatedMinutes: z.number().int().min(5).max(180).optional().default(25),
+  notes: z.string().max(300).optional(),
+  initialStage: z
+    .enum(['assigned', 'arrived_at_pickup', 'picked_up', 'on_the_way', 'near_destination', 'delivered'])
+    .optional()
+    .default('assigned'),
+});
+
+export const UpdateDeliveryStageSchema = z.object({
+  stage: z.enum(['assigned', 'arrived_at_pickup', 'picked_up', 'on_the_way', 'near_destination', 'delivered']),
+  notes: z.string().max(300).optional(),
+  progressPercent: z.number().min(0).max(100).optional(),
+  currentLocationLabel: z.string().max(120).optional(),
+});
+
 export type CreateOrderInput = z.infer<typeof CreateOrderSchema>;
 
 // ==========================================

@@ -35,6 +35,9 @@ export interface FilterBarProps {
   onClearAllFilters: () => void;
   totalFiltered: number;
   isSticky?: boolean;
+  idPrefix?: string;
+  className?: string;
+  showIndicatorButtons?: boolean;
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -57,7 +60,11 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onClearAllFilters,
   totalFiltered,
   isSticky = false,
+  idPrefix = '',
+  className = '',
+  showIndicatorButtons = true,
 }) => {
+  const p = (id: string) => (idPrefix ? `${idPrefix}-${id}` : id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -80,21 +87,24 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   const checkScroll = useCallback(() => {
     if (!scrollRef.current) return;
     const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
-    setCanScrollLeft(scrollLeft > 10);
-    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+    setCanScrollLeft(scrollLeft > 6);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 6);
   }, []);
 
   useEffect(() => {
     checkScroll();
+    const timer = setTimeout(checkScroll, 100);
     const el = scrollRef.current;
     if (el) {
       el.addEventListener('scroll', checkScroll, { passive: true });
       window.addEventListener('resize', checkScroll);
       return () => {
+        clearTimeout(timer);
         el.removeEventListener('scroll', checkScroll);
         window.removeEventListener('resize', checkScroll);
       };
     }
+    return () => clearTimeout(timer);
   }, [checkScroll]);
 
   // Close sort dropdown when clicking outside
@@ -174,53 +184,31 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   return (
     <div
       className={`w-full max-w-full relative select-none overflow-hidden ${
-        isSticky ? 'my-0 py-1' : 'my-3 pb-2 border-b border-stone-200/80 dark:border-stone-800/80'
+        className ? className : isSticky ? 'my-0 py-1' : 'my-1 py-0.5'
       }`}
     >
-      {/* Zomato Overlapping Scroll Indicator - Left Side */}
-      {canScrollLeft && (
-        <>
-          <div
-            className={`pointer-events-none absolute left-0 top-0 ${
-              isSticky ? 'bottom-0' : 'bottom-2'
-            } w-10 bg-gradient-to-r ${
-              isSticky
-                ? 'from-white via-white/80 dark:from-stone-900 dark:via-stone-900/80'
-                : 'from-stone-50 via-stone-50/80 dark:from-stone-950 dark:via-stone-950/80'
-            } to-transparent z-20`}
-          />
-          <button
-            id="filter-scroll-left"
-            onClick={slideLeft}
-            aria-label="Scroll left"
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-30 w-7 h-7 rounded-full bg-white/95 dark:bg-stone-800/95 shadow-md hover:shadow-lg border border-stone-200 dark:border-stone-700 flex items-center justify-center text-stone-700 dark:text-stone-300 hover:text-amber-600 dark:hover:text-amber-400 hover:scale-110 active:scale-95 transition-all cursor-pointer backdrop-blur-xs"
-          >
-            <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
-          </button>
-        </>
+      {/* Scroll Indicator - Left Side (Translucent glass slide button matching food category) */}
+      {showIndicatorButtons && canScrollLeft && (
+        <button
+          id={p('filter-scroll-left')}
+          onClick={slideLeft}
+          aria-label="Scroll left"
+          className="absolute left-1 top-1/2 -translate-y-1/2 z-30 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-black/50 hover:bg-black/75 shadow-md border border-white/25 flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all cursor-pointer backdrop-blur-xs"
+        >
+          <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+        </button>
       )}
 
-      {/* Zomato Overlapping Scroll Indicator - Right Side */}
-      {canScrollRight && (
-        <>
-          <div
-            className={`pointer-events-none absolute right-0 top-0 ${
-              isSticky ? 'bottom-0' : 'bottom-2'
-            } w-12 bg-gradient-to-l ${
-              isSticky
-                ? 'from-white via-white/80 dark:from-stone-900 dark:via-stone-900/80'
-                : 'from-stone-50 via-stone-50/80 dark:from-stone-950 dark:via-stone-950/80'
-            } to-transparent z-20`}
-          />
-          <button
-            id="filter-scroll-right"
-            onClick={slideRight}
-            aria-label="Scroll right for more filters"
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-30 w-7 h-7 rounded-full bg-white/95 dark:bg-stone-800/95 shadow-md hover:shadow-lg border border-stone-200 dark:border-stone-700 flex items-center justify-center text-stone-700 dark:text-stone-300 hover:text-amber-600 dark:hover:text-amber-400 hover:scale-110 active:scale-95 transition-all cursor-pointer backdrop-blur-xs"
-          >
-            <ChevronRight className="w-4 h-4 stroke-[2.5]" />
-          </button>
-        </>
+      {/* Scroll Indicator - Right Side (Translucent glass slide button matching food category) */}
+      {showIndicatorButtons && canScrollRight && (
+        <button
+          id={p('filter-scroll-right')}
+          onClick={slideRight}
+          aria-label="Scroll right for more filters"
+          className="absolute right-1 top-1/2 -translate-y-1/2 z-30 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-black/50 hover:bg-black/75 shadow-md border border-white/25 flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all cursor-pointer backdrop-blur-xs"
+        >
+          <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+        </button>
       )}
 
       {/* Horizontal Scrollable Filter Pills Container (Thumb Swipe on Mobile) */}
@@ -240,7 +228,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       >
         {/* 1. Main Zomato "Filters" Button (Opens Filter Sheet) */}
         <button
-          id="btn-open-zomato-filters"
+          id={p('btn-open-zomato-filters')}
           onClick={() => wrapClick(() => setIsFilterModalOpen(true))}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             activeFiltersCount > 0
@@ -260,7 +248,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         {/* 2. Sort by Pill with Quick Dropdown */}
         <div className="relative shrink-0" ref={sortDropdownRef}>
           <button
-            id="btn-sort-dropdown"
+            id={p('btn-sort-dropdown')}
             onClick={() => wrapClick(() => setIsSortDropdownOpen(!isSortDropdownOpen))}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
               sortBy !== 'popular'
@@ -305,7 +293,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
         {/* 3. Pure Veg Pill */}
         <button
-          id="filter-pure-veg"
+          id={p('filter-pure-veg')}
           onClick={() => wrapClick(onToggleVegOnly)}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             vegOnly
@@ -322,7 +310,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
         {/* 4. Non-Veg Pill */}
         <button
-          id="filter-non-veg"
+          id={p('filter-non-veg')}
           onClick={() => wrapClick(onToggleNonVegOnly)}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             nonVegOnly
@@ -339,7 +327,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
         {/* 5. Rating 4.5+ Pill */}
         <button
-          id="filter-rating"
+          id={p('filter-rating')}
           onClick={() => wrapClick(onToggleRating)}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             ratingOnly
@@ -354,7 +342,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
         {/* 6. Bestsellers Pill */}
         <button
-          id="filter-bestseller"
+          id={p('filter-bestseller')}
           onClick={() => wrapClick(onToggleBestseller)}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             bestsellerOnly
@@ -369,7 +357,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
         {/* 7. Great Offers / Discounts Pill */}
         <button
-          id="filter-offers"
+          id={p('filter-offers')}
           onClick={() => wrapClick(onToggleOffers)}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             offersOnly
@@ -384,7 +372,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
         {/* 8. Under ₹250 / Budget Friendly Pill */}
         <button
-          id="filter-under-250"
+          id={p('filter-under-250')}
           onClick={() => wrapClick(() => onSelectMaxPrice(maxPrice === 250 ? null : 250))}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             maxPrice === 250
@@ -399,7 +387,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
         {/* 9. Fast Prep (< 20 mins) Pill */}
         <button
-          id="filter-quick-prep"
+          id={p('filter-quick-prep')}
           onClick={() => wrapClick(onToggleQuickPrep)}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all cursor-pointer shadow-2xs ${
             quickPrepOnly
@@ -415,7 +403,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         {/* 10. Clear All Filters Button (Visible only when filters active) */}
         {activeFiltersCount > 0 && (
           <button
-            id="filter-clear-all"
+            id={p('filter-clear-all')}
             onClick={() => wrapClick(onClearAllFilters)}
             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700 border border-stone-200 dark:border-stone-700 transition-all cursor-pointer"
           >
