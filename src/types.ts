@@ -57,6 +57,10 @@ export interface DeliveryPartner {
   totalDeliveries: number;
   photoUrl?: string;
   batteryLevel?: number;
+  currentCoordinates?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface DeliveryWaypoint {
@@ -89,6 +93,13 @@ export interface DeliveryTracking {
   estimatedArrivalTime: string; // e.g. "08:15 PM"
   progressPercent: number; // 0 to 100 for GPS position along NH-48 route
   currentLocationLabel: string;
+  partnerLocation?: {
+    lat: number;
+    lng: number;
+    speedKmh?: number;
+    heading?: number;
+    updatedAt?: string;
+  };
   pickupLocation: {
     name: string;
     address: string;

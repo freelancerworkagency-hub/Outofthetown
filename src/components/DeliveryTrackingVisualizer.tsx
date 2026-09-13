@@ -15,9 +15,11 @@ import {
   ChevronRight,
   ExternalLink,
   RotateCw,
+  Map as MapIcon,
 } from 'lucide-react';
-import type { Order, DeliveryTracking, DeliveryTrackingStage } from '../types.js';
-import { STAGE_CONFIG, PRESET_DELIVERY_PARTNERS, createInitialDeliveryTracking } from '../utils/deliveryFleet.js';
+import type { Order, DeliveryTracking, DeliveryTrackingStage } from '../types';
+import { STAGE_CONFIG, PRESET_DELIVERY_PARTNERS, createInitialDeliveryTracking } from '../utils/deliveryFleet';
+import { DeliveryPartnerRouteMap } from './delivery/DeliveryPartnerRouteMap';
 
 interface DeliveryTrackingVisualizerProps {
   order: Order;
@@ -45,6 +47,7 @@ export const DeliveryTrackingVisualizer: React.FC<DeliveryTrackingVisualizerProp
 
   // Local simulated seconds countdown for dynamic feel
   const [countdownMinutes, setCountdownMinutes] = useState(tracking.estimatedDeliveryMinutes || 25);
+  const [viewMode, setViewMode] = useState<'map' | 'strip'>('map');
 
   useEffect(() => {
     if (stage === 'delivered') {
@@ -81,116 +84,159 @@ export const DeliveryTrackingVisualizer: React.FC<DeliveryTrackingVisualizerProp
             </p>
           </div>
 
-          <div className="bg-stone-800/80 backdrop-blur-xs px-3.5 py-2.5 rounded-2xl border border-stone-700/60 text-right">
-            <span className="text-[10px] text-stone-400 uppercase font-bold block">Estimated Arrival</span>
-            {stage === 'delivered' ? (
-              <span className="text-sm font-bold text-emerald-400 flex items-center gap-1">
-                <CheckCircle2 className="w-4 h-4" /> Delivered
-              </span>
-            ) : (
-              <div>
-                <span className="font-mono text-lg font-black text-amber-400">
-                  {countdownMinutes} mins
+          <div className="flex items-center gap-2">
+            <div className="bg-stone-800/80 backdrop-blur-xs px-3.5 py-2.5 rounded-2xl border border-stone-700/60 text-right">
+              <span className="text-[10px] text-stone-400 uppercase font-bold block">Estimated Arrival</span>
+              {stage === 'delivered' ? (
+                <span className="text-sm font-bold text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" /> Delivered
                 </span>
-                <span className="text-[10px] text-stone-400 block font-mono">
-                  by ~{tracking.estimatedArrivalTime || 'soon'}
-                </span>
-              </div>
-            )}
+              ) : (
+                <div>
+                  <span className="font-mono text-lg font-black text-amber-400">
+                    {countdownMinutes} mins
+                  </span>
+                  <span className="text-[10px] text-stone-400 block font-mono">
+                    by ~{tracking.estimatedArrivalTime || 'soon'}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Live Highway Visual Route Track */}
-        <div className="relative mt-5 pt-3 border-t border-stone-800">
-          <div className="flex items-center justify-between text-[11px] text-stone-400 font-semibold mb-2">
-            <span className="flex items-center gap-1 text-amber-300">
-              <Store className="w-3.5 h-3.5" /> OTT Restro (Kukas)
-            </span>
-            <span className="flex items-center gap-1 text-emerald-400">
-              <MapPin className="w-3.5 h-3.5" /> Your Doorstep
-            </span>
+        {/* View Switcher: Live Map vs Highway Corridor Strip */}
+        <div className="relative mt-4 pt-3 border-t border-stone-800 flex items-center justify-between">
+          <div className="flex items-center gap-1 bg-stone-950 p-1 rounded-xl border border-stone-800">
+            <button
+              type="button"
+              onClick={() => setViewMode('map')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'map'
+                  ? 'bg-amber-500 text-stone-950 shadow-xs'
+                  : 'text-stone-400 hover:text-stone-200'
+              }`}
+            >
+              <MapIcon className="w-3.5 h-3.5" />
+              <span>Interactive GPS Map</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('strip')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'strip'
+                  ? 'bg-amber-500 text-stone-950 shadow-xs'
+                  : 'text-stone-400 hover:text-stone-200'
+              }`}
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span>Highway Strip</span>
+            </button>
           </div>
 
-          {/* Road Visual Strip */}
-          <div className="relative h-12 rounded-xl bg-stone-950 border border-stone-800 flex items-center px-4 overflow-hidden">
-            {/* Road center dashed line */}
-            <div className="absolute inset-x-0 h-0.5 top-1/2 -translate-y-1/2 border-b border-dashed border-stone-700/80 pointer-events-none" />
+          <span className="text-[11px] text-amber-400 font-mono hidden sm:inline-block">
+            {stageCfg.description}
+          </span>
+        </div>
 
-            {/* Road progress fill */}
-            <div
-              className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-amber-500/30 to-amber-500/10 border-r-2 border-amber-400 transition-all duration-700 pointer-events-none"
-              style={{ width: `${Math.min(100, Math.max(6, progressPercent))}%` }}
-            />
-
-            {/* Waypoint 1: OTT Kitchen */}
-            <div className="absolute left-3 flex flex-col items-center z-10">
-              <div
-                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  progressPercent >= 20 ? 'bg-amber-500 text-stone-950 shadow-xs' : 'bg-stone-800 text-stone-400'
-                }`}
-              >
-                1
-              </div>
+        {/* Dynamic Route View */}
+        {viewMode === 'map' ? (
+          <div className="mt-3">
+            <DeliveryPartnerRouteMap order={order} partner={partner} />
+          </div>
+        ) : (
+          /* Live Highway Visual Route Track */
+          <div className="relative mt-3">
+            <div className="flex items-center justify-between text-[11px] text-stone-400 font-semibold mb-2">
+              <span className="flex items-center gap-1 text-amber-300">
+                <Store className="w-3.5 h-3.5" /> OTT Restro (Kukas)
+              </span>
+              <span className="flex items-center gap-1 text-emerald-400">
+                <MapPin className="w-3.5 h-3.5" /> Your Doorstep
+              </span>
             </div>
 
-            {/* Waypoint 2: RIICO Junction */}
-            <div className="absolute left-[33%] -translate-x-1/2 flex flex-col items-center z-10">
-              <div
-                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  progressPercent >= 50 ? 'bg-amber-500 text-stone-950 shadow-xs' : 'bg-stone-800 text-stone-400'
-                }`}
-              >
-                2
-              </div>
-            </div>
+            {/* Road Visual Strip */}
+            <div className="relative h-12 rounded-xl bg-stone-950 border border-stone-800 flex items-center px-4 overflow-hidden">
+              {/* Road center dashed line */}
+              <div className="absolute inset-x-0 h-0.5 top-1/2 -translate-y-1/2 border-b border-dashed border-stone-700/80 pointer-events-none" />
 
-            {/* Waypoint 3: Highway Corridor */}
-            <div className="absolute left-[66%] -translate-x-1/2 flex flex-col items-center z-10">
+              {/* Road progress fill */}
               <div
-                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  progressPercent >= 80 ? 'bg-amber-500 text-stone-950 shadow-xs' : 'bg-stone-800 text-stone-400'
-                }`}
-              >
-                3
-              </div>
-            </div>
+                className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-amber-500/30 to-amber-500/10 border-r-2 border-amber-400 transition-all duration-700 pointer-events-none"
+                style={{ width: `${Math.min(100, Math.max(6, progressPercent))}%` }}
+              />
 
-            {/* Waypoint 4: Destination */}
-            <div className="absolute right-3 flex flex-col items-center z-10">
+              {/* Waypoint 1: OTT Kitchen */}
+              <div className="absolute left-3 flex flex-col items-center z-10">
+                <div
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    progressPercent >= 20 ? 'bg-amber-500 text-stone-950 shadow-xs' : 'bg-stone-800 text-stone-400'
+                  }`}
+                >
+                  1
+                </div>
+              </div>
+
+              {/* Waypoint 2: RIICO Junction */}
+              <div className="absolute left-[33%] -translate-x-1/2 flex flex-col items-center z-10">
+                <div
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    progressPercent >= 50 ? 'bg-amber-500 text-stone-950 shadow-xs' : 'bg-stone-800 text-stone-400'
+                  }`}
+                >
+                  2
+                </div>
+              </div>
+
+              {/* Waypoint 3: Highway Corridor */}
+              <div className="absolute left-[66%] -translate-x-1/2 flex flex-col items-center z-10">
+                <div
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    progressPercent >= 80 ? 'bg-amber-500 text-stone-950 shadow-xs' : 'bg-stone-800 text-stone-400'
+                  }`}
+                >
+                  3
+                </div>
+              </div>
+
+              {/* Waypoint 4: Destination */}
+              <div className="absolute right-3 flex flex-col items-center z-10">
+                <div
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    progressPercent >= 100 ? 'bg-emerald-500 text-white shadow-xs' : 'bg-stone-800 text-stone-400'
+                  }`}
+                >
+                  <MapPin className="w-3 h-3" />
+                </div>
+              </div>
+
+              {/* Animated Moving Rider Marker */}
               <div
-                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  progressPercent >= 100 ? 'bg-emerald-500 text-white shadow-xs' : 'bg-stone-800 text-stone-400'
-                }`}
+                className="absolute z-20 -translate-x-1/2 transition-all duration-700 flex flex-col items-center"
+                style={{ left: `${Math.min(94, Math.max(6, progressPercent))}%` }}
               >
-                <MapPin className="w-3 h-3" />
-              </div>
-            </div>
-
-            {/* Animated Moving Rider Marker */}
-            <div
-              className="absolute z-20 -translate-x-1/2 transition-all duration-700 flex flex-col items-center"
-              style={{ left: `${Math.min(94, Math.max(6, progressPercent))}%` }}
-            >
-              <div className="relative">
-                <div className="absolute -inset-1 rounded-full bg-amber-400/40 animate-ping" />
-                <div className="w-8 h-8 rounded-full bg-amber-500 text-stone-950 flex items-center justify-center shadow-lg border-2 border-white dark:border-stone-900">
-                  {partner.vehicleType === 'van' ? (
-                    <Car className="w-4 h-4" />
-                  ) : (
-                    <Bike className="w-4 h-4" />
-                  )}
+                <div className="relative">
+                  <div className="absolute -inset-1 rounded-full bg-amber-400/40 animate-ping" />
+                  <div className="w-8 h-8 rounded-full bg-amber-500 text-stone-950 flex items-center justify-center shadow-lg border-2 border-white dark:border-stone-900">
+                    {partner.vehicleType === 'van' ? (
+                      <Car className="w-4 h-4" />
+                    ) : (
+                      <Bike className="w-4 h-4" />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center justify-between text-[10px] text-stone-400 mt-1 px-1">
-            <span>OTT Kitchen</span>
-            <span>RIICO Junction</span>
-            <span>Highway Corridor</span>
-            <span>Customer Address</span>
+            <div className="flex items-center justify-between text-[10px] text-stone-400 mt-1 px-1">
+              <span>OTT Kitchen</span>
+              <span>RIICO Junction</span>
+              <span>Highway Corridor</span>
+              <span>Customer Address</span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Assigned Delivery Partner Card */}

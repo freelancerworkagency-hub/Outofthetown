@@ -20,10 +20,10 @@ import {
   Phone,
   LogOut,
 } from 'lucide-react';
-import { useCart } from '../context/CartContext.js';
-import { useAuth } from '../context/AuthContext.js';
-import { api } from '../services/api.js';
-import type { Order, OrderType, PaymentMethod } from '../types.js';
+import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
+import type { Order, OrderType, PaymentMethod } from '../types';
 
 interface CartDrawerProps {
   onOrderSuccess: (order: Order) => void;

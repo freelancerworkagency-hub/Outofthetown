@@ -1,5 +1,5 @@
-import { getSupabaseClient, getSupabaseConfig, SUPABASE_SQL_SCHEMA } from './supabase.js';
-import type { Order, Reservation, MenuItem, PromoBanner, CafeInfo } from '../src/types.js';
+import { getSupabaseClient, getSupabaseConfig, SUPABASE_SQL_SCHEMA } from './supabase';
+import type { Order, Reservation, MenuItem, PromoBanner, CafeInfo } from '../src/types';
 
 export const ALL_EXPECTED_TABLES = [
   'orders',

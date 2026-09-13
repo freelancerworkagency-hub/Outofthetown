@@ -19,11 +19,14 @@ import {
   AlertCircle,
   RefreshCw,
   Cake,
+  Bike,
+  Navigation,
+  MapPin,
 } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext.js';
-import { useAuth } from '../context/AuthContext.js';
-import { api } from '../services/api.js';
-import type { Order, Reservation } from '../types.js';
+import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
+import type { Order, Reservation } from '../types';
 
 export interface CustomerProfileModalProps {
   isOpen: boolean;
@@ -31,6 +34,8 @@ export interface CustomerProfileModalProps {
   onOpenReservation: () => void;
   onOpenAdmin: () => void;
   onOpenCustomCake?: () => void;
+  onOpenDeliveryPartner?: () => void;
+  onSelectOrder?: (order: Order) => void;
 }
 
 export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
@@ -39,6 +44,8 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
   onOpenReservation,
   onOpenAdmin,
   onOpenCustomCake,
+  onOpenDeliveryPartner,
+  onSelectOrder,
 }) => {
   const { isDark, toggleTheme } = useTheme();
   const { customer, customerToken, isAuthenticated, logout, openAuthModal } = useAuth();
@@ -398,6 +405,34 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                 <ChevronRight className="w-4 h-4 text-stone-400 group-hover:translate-x-0.5 transition-transform" />
               </button>
 
+              {/* 4b. DELIVERY PARTNER PORTAL SHORTCUT */}
+              <button
+                id="customer-menu-delivery-partner-btn"
+                onClick={() => {
+                  onClose();
+                  onOpenDeliveryPartner?.();
+                }}
+                className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-amber-50/70 dark:hover:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/60 font-semibold text-stone-700 dark:text-stone-300 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 flex items-center justify-center shadow-xs">
+                    <Bike className="w-4.5 h-4.5" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
+                      <span>Delivery Partner Portal</span>
+                      <span className="text-[10px] uppercase font-black px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                        Rider Hub
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-stone-500 dark:text-stone-400">
+                      GPS Route Map to Customer, Pickups &amp; Active Runs
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-amber-500 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+
               {/* 5. CUSTOMER CARE & ORDERS HELPLINE */}
               <a
                 id="customer-menu-call-support"
@@ -487,75 +522,125 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
                   </p>
                 </div>
               ) : (
-                orders.map((ord) => (
-                  <div
-                    key={ord.id}
-                    className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-xs text-stone-900 dark:text-stone-100">
-                            #{ord.id}
-                          </span>
-                          {(ord.isCustomCake || ord.customCakeDetails) && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 flex items-center gap-1">
-                              <Cake className="w-2.5 h-2.5" />
-                              <span>Custom Cake</span>
+                orders.map((ord) => {
+                  const isDeliveryOrder = ord.orderType === 'delivery' || Boolean(ord.deliveryAddress);
+                  const isOrderActive = ord.status !== 'delivered' && ord.status !== 'cancelled';
+
+                  return (
+                    <div
+                      key={ord.id}
+                      onClick={() => {
+                        onSelectOrder?.(ord);
+                        onClose();
+                      }}
+                      className="p-3.5 sm:p-4 rounded-2xl bg-stone-50 dark:bg-stone-800/80 hover:bg-amber-50/50 dark:hover:bg-amber-950/25 border border-stone-200 dark:border-stone-700 hover:border-amber-400 dark:hover:border-amber-500/60 transition-all cursor-pointer group shadow-xs hover:shadow-md"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-xs text-stone-900 dark:text-stone-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                              #{ord.id}
                             </span>
-                          )}
+                            {(ord.isCustomCake || ord.customCakeDetails) && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 flex items-center gap-1">
+                                <Cake className="w-2.5 h-2.5" />
+                                <span>Custom Cake</span>
+                              </span>
+                            )}
+                            {isDeliveryOrder && isOrderActive && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                                <span>Live GPS</span>
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-stone-400 flex items-center gap-1 mt-0.5">
+                            <Clock className="w-3 h-3" />
+                            <span>{new Date(ord.createdAt).toLocaleDateString()} at {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
                         </div>
-                        <div className="text-[10px] text-stone-400 flex items-center gap-1 mt-0.5">
-                          <Clock className="w-3 h-3" />
-                          <span>{new Date(ord.createdAt).toLocaleDateString()} at {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                        {ord.status}
-                      </span>
-                    </div>
 
-                    {(ord.isCustomCake || ord.customCakeDetails) && ord.customCakeDetails?.referenceImageUrl && (
-                      <div className="mb-2 p-1.5 rounded-xl bg-rose-50/50 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-900/40 flex items-center gap-2">
-                        <img
-                          src={ord.customCakeDetails.referenceImageUrl}
-                          alt="Cake reference"
-                          referrerPolicy="no-referrer"
-                          className="w-10 h-10 rounded-lg object-cover border border-stone-200 shrink-0"
-                        />
-                        <div className="text-[11px] min-w-0">
-                          <p className="font-semibold text-rose-900 dark:text-rose-200 truncate">
-                            {ord.customCakeDetails.occasion} • {ord.customCakeDetails.weightKg}kg {ord.customCakeDetails.flavor}
-                          </p>
-                          {ord.customCakeDetails.targetDate && (
-                            <p className="text-[10px] text-stone-500 dark:text-stone-400">
-                              Event: {ord.customCakeDetails.targetDate} ({ord.customCakeDetails.targetTime})
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                          ord.status === 'delivered'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            : ord.status === 'cancelled'
+                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                            : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                        }`}>
+                          {ord.status === 'ready' && isDeliveryOrder ? 'Out for Delivery' : ord.status}
+                        </span>
+                      </div>
+
+                      {(ord.isCustomCake || ord.customCakeDetails) && ord.customCakeDetails?.referenceImageUrl && (
+                        <div className="mb-2 p-1.5 rounded-xl bg-rose-50/50 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-900/40 flex items-center gap-2">
+                          <img
+                            src={ord.customCakeDetails.referenceImageUrl}
+                            alt="Cake reference"
+                            referrerPolicy="no-referrer"
+                            className="w-10 h-10 rounded-lg object-cover border border-stone-200 shrink-0"
+                          />
+                          <div className="text-[11px] min-w-0">
+                            <p className="font-semibold text-rose-900 dark:text-rose-200 truncate">
+                              {ord.customCakeDetails.occasion} • {ord.customCakeDetails.weightKg}kg {ord.customCakeDetails.flavor}
                             </p>
-                          )}
+                            {ord.customCakeDetails.targetDate && (
+                              <p className="text-[10px] text-stone-500 dark:text-stone-400">
+                                Event: {ord.customCakeDetails.targetDate} ({ord.customCakeDetails.targetTime})
+                              </p>
+                            )}
+                          </div>
                         </div>
+                      )}
+
+                      {/* Items preview */}
+                      <div className="text-xs text-stone-600 dark:text-stone-300 space-y-1 mb-2.5">
+                        {ord.items.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between">
+                            <span>
+                              {item.quantity}x {item.name}
+                            </span>
+                            <span className="font-mono">₹{item.price * item.quantity}</span>
+                          </div>
+                        ))}
                       </div>
-                    )}
 
-                    {/* Items preview */}
-                    <div className="text-xs text-stone-600 dark:text-stone-300 space-y-1 mb-2">
-                      {ord.items.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between">
-                          <span>
-                            {item.quantity}x {item.name}
-                          </span>
-                          <span className="font-mono">₹{item.price * item.quantity}</span>
+                      {/* Delivery Partner Assigned Notice */}
+                      {ord.deliveryPartner && (
+                        <div className="mb-2.5 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] flex items-center justify-between text-amber-800 dark:text-amber-300">
+                          <div className="flex items-center gap-1.5">
+                            <Bike className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                            <span>Rider: <strong>{ord.deliveryPartner.name}</strong> ({ord.deliveryPartner.vehicleNumber})</span>
+                          </div>
+                          <span className="font-bold">{ord.deliveryTracking?.estimatedArrivalTime ? `ETA ~${ord.deliveryTracking.estimatedArrivalTime}` : 'Dispatched'}</span>
                         </div>
-                      ))}
-                    </div>
+                      )}
 
-                    <div className="flex items-center justify-between pt-2 border-t border-stone-200 dark:border-stone-700 text-xs">
-                      <span className="text-stone-500">Total Amount:</span>
-                      <span className="font-bold font-mono text-amber-600 dark:text-amber-400">
-                        ₹{ord.total}
-                      </span>
+                      {/* Card Footer with Price & Interactive Live Track Button */}
+                      <div className="flex items-center justify-between pt-2.5 border-t border-stone-200 dark:border-stone-700 text-xs">
+                        <div>
+                          <span className="text-stone-500 dark:text-stone-400 text-[11px] block">Total Amount</span>
+                          <span className="font-bold font-mono text-stone-900 dark:text-stone-100 text-sm">
+                            ₹{ord.total}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectOrder?.(ord);
+                            onClose();
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-sm group-hover:scale-102 transition-all cursor-pointer"
+                        >
+                          <Navigation className="w-3.5 h-3.5" />
+                          <span>Track Live &amp; Details</span>
+                          <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}

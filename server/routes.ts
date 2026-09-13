@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
-import { store } from './store.js';
+import { store } from './store';
 import {
   SupabaseService,
   isFakeOrder,
   isFakeReservation,
   FAKE_ORDER_IDS,
   FAKE_RESV_IDS,
-} from './supabaseService.js';
+} from './supabaseService';
 import {
   CreateOrderSchema,
   UpdateOrderStatusSchema,
@@ -20,13 +20,13 @@ import {
   CustomerVerifyOtpSchema,
   AssignDeliveryPartnerSchema,
   UpdateDeliveryStageSchema,
-} from './schemas.js';
+} from './schemas';
 import {
   orderLimiter,
   reservationLimiter,
   adminAuthLimiter,
-} from './middleware/rateLimiter.js';
-import type { Order, Reservation, MenuItem, PromoBanner } from '../src/types.js';
+} from './middleware/rateLimiter';
+import type { Order, Reservation, MenuItem, PromoBanner } from '../src/types';
 
 export const apiRouter = Router();
 
@@ -1069,6 +1069,218 @@ apiRouter.patch('/admin/orders/:id/delivery-stage', requireAdmin, async (req: Re
     success: true,
     message: `Delivery stage updated to ${stage}`,
     data: order,
+  });
+});
+
+// ==========================================
+// DELIVERY PARTNER PORTAL DEDICATED ROUTES
+// ==========================================
+
+// Get all delivery orders for Delivery Partner portal (can filter by partnerId)
+apiRouter.get('/delivery/orders', async (req: Request, res: Response) => {
+  const partnerId = req.query.partnerId as string | undefined;
+  
+  // Filter all genuine delivery orders
+  let deliveryOrders = store.orders.filter(
+    (o) => (o.orderType === 'delivery' || Boolean(o.deliveryAddress)) && o.status !== 'cancelled'
+  );
+
+  if (partnerId) {
+    deliveryOrders = deliveryOrders.filter(
+      (o) => o.deliveryPartner?.id === partnerId || !o.deliveryPartner
+    );
+  }
+
+  res.json({
+    success: true,
+    data: deliveryOrders,
+    stats: {
+      total: deliveryOrders.length,
+      assigned: deliveryOrders.filter((o) => o.deliveryPartner?.id === partnerId && o.status !== 'delivered').length,
+      completedToday: deliveryOrders.filter((o) => o.deliveryPartner?.id === partnerId && o.status === 'delivered').length,
+      availableToClaim: deliveryOrders.filter((o) => !o.deliveryPartner && o.status !== 'delivered').length,
+    },
+  });
+});
+
+// Claim an unassigned delivery order by a partner
+apiRouter.post('/delivery/orders/:id/claim', async (req: Request, res: Response) => {
+  const order = store.orders.find((o) => o.id === req.params.id);
+  if (!order) {
+    return res.status(404).json({ success: false, error: 'Order not found' });
+  }
+
+  const { partner } = req.body;
+  if (!partner || !partner.id || !partner.name) {
+    return res.status(400).json({ success: false, error: 'Delivery partner details are required' });
+  }
+
+  const nowIso = new Date().toISOString();
+  order.deliveryPartner = partner;
+  
+  if (!order.deliveryTracking) {
+    order.deliveryTracking = {
+      partner,
+      stage: 'assigned',
+      statusNotes: `Claimed by ${partner.name} (${partner.vehicleNumber})`,
+      assignedAt: nowIso,
+      estimatedDeliveryMinutes: 25,
+      estimatedArrivalTime: new Date(Date.now() + 25 * 60 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      progressPercent: 15,
+      currentLocationLabel: 'Heading towards OTT Restro Kukas',
+      pickupLocation: {
+        name: store.cafeInfo.name,
+        address: store.cafeInfo.address,
+        phone: store.cafeInfo.phone,
+        lat: 27.0543,
+        lng: 75.8988,
+      },
+      deliveryLocation: {
+        customerName: order.customerName,
+        address: order.deliveryAddress || 'Kukas / Jaipur Delivery Address',
+        phone: order.customerPhone,
+        lat: 26.9855,
+        lng: 75.8513,
+      },
+      waypoints: [
+        { id: 'wp-1', name: 'Out of the Town (OTT) Restro', landmark: 'SP 41 B, NH-48 Highway, Kukas', distanceKm: 0, completed: false, active: true },
+        { id: 'wp-2', name: 'RIICO Industrial Area', landmark: 'NH-48 Jaipur Bypass', distanceKm: 1.8, completed: false, active: false },
+        { id: 'wp-3', name: 'Highway Toll & Amity Corridor', landmark: 'Jaipur Highway Stretch', distanceKm: 4.5, completed: false, active: false },
+        { id: 'wp-4', name: 'Destination Doorstep', landmark: order.deliveryAddress || 'Customer Address', distanceKm: 8.2, completed: false, active: false },
+      ],
+      timeline: [
+        {
+          stage: 'assigned',
+          title: 'Partner Assigned',
+          description: `${partner.name} accepted this delivery run`,
+          timestamp: nowIso,
+          completed: true,
+        },
+      ],
+    };
+  } else {
+    order.deliveryTracking.partner = partner;
+    order.deliveryTracking.stage = 'assigned';
+    order.deliveryTracking.statusNotes = `Assigned to ${partner.name} (${partner.vehicleNumber})`;
+  }
+
+  SupabaseService.updateOrderStatus(order.id, order.status, {
+    notes: `Delivery assigned to ${partner.name}`,
+  }).catch(() => {});
+
+  res.json({ success: true, message: `Order #${order.id} claimed successfully`, data: order });
+});
+
+// Delivery Partner updates stage directly from rider app
+apiRouter.patch('/delivery/orders/:id/stage', async (req: Request, res: Response) => {
+  const order = store.orders.find((o) => o.id === req.params.id);
+  if (!order) {
+    return res.status(404).json({ success: false, error: 'Order not found' });
+  }
+
+  const { stage, notes, currentLocationLabel, lat, lng, speedKmh } = req.body;
+  const nowIso = new Date().toISOString();
+
+  if (!order.deliveryTracking) {
+    return res.status(400).json({ success: false, error: 'Delivery tracking has not been initialized for this order' });
+  }
+
+  order.deliveryTracking.stage = stage;
+  if (notes) order.deliveryTracking.statusNotes = notes;
+
+  // Update progress and location labels
+  if (stage === 'assigned') {
+    order.deliveryTracking.progressPercent = 15;
+    order.deliveryTracking.currentLocationLabel = currentLocationLabel || 'Heading towards OTT Restro Kukas';
+  } else if (stage === 'arrived_at_pickup') {
+    order.deliveryTracking.progressPercent = 30;
+    order.deliveryTracking.currentLocationLabel = currentLocationLabel || 'At OTT Kitchen Counter (Kukas)';
+    if (!order.deliveryTracking.arrivedAtPickupAt) order.deliveryTracking.arrivedAtPickupAt = nowIso;
+  } else if (stage === 'picked_up') {
+    order.deliveryTracking.progressPercent = 50;
+    order.deliveryTracking.currentLocationLabel = currentLocationLabel || 'Food picked up, starting transit';
+    order.deliveryTracking.pickedUpAt = nowIso;
+    order.status = 'ready';
+  } else if (stage === 'on_the_way') {
+    order.deliveryTracking.progressPercent = 78;
+    order.deliveryTracking.currentLocationLabel = currentLocationLabel || 'Cruising NH-48 Jaipur-Delhi Highway';
+  } else if (stage === 'near_destination') {
+    order.deliveryTracking.progressPercent = 92;
+    order.deliveryTracking.currentLocationLabel = currentLocationLabel || 'Arrived in customer locality / Gate';
+  } else if (stage === 'delivered') {
+    order.deliveryTracking.progressPercent = 100;
+    order.deliveryTracking.currentLocationLabel = currentLocationLabel || 'Delivered at customer doorstep';
+    order.deliveryTracking.deliveredAt = nowIso;
+    order.status = 'delivered';
+    order.statusNotes = 'Delivered successfully by delivery partner';
+  }
+
+  // Update real-time GPS coordinates if provided
+  if (lat !== undefined && lng !== undefined) {
+    order.deliveryTracking.partnerLocation = {
+      lat: Number(lat),
+      lng: Number(lng),
+      speedKmh: speedKmh ? Number(speedKmh) : undefined,
+      updatedAt: nowIso,
+    };
+  }
+
+  // Update timeline
+  const stageTitles: Record<string, string> = {
+    assigned: 'Delivery Partner Assigned',
+    arrived_at_pickup: 'Partner at OTT Kitchen Counter',
+    picked_up: 'Order Picked Up & Hot-Sealed',
+    on_the_way: 'Food on the Way (NH-48 Transit)',
+    near_destination: 'Rider Reached Customer Gate',
+    delivered: 'Delivered to Doorstep',
+  };
+
+  if (!order.deliveryTracking.timeline.some((t) => t.stage === stage)) {
+    order.deliveryTracking.timeline.push({
+      stage,
+      title: stageTitles[stage] || stage,
+      description: notes || order.deliveryTracking.currentLocationLabel,
+      timestamp: nowIso,
+      completed: true,
+    });
+  }
+
+  SupabaseService.updateOrderStatus(order.id, order.status, {
+    notes: `Delivery stage: ${stage}`,
+  }).catch(() => {});
+
+  res.json({ success: true, message: `Delivery stage updated to ${stage}`, data: order });
+});
+
+// Delivery Partner real-time GPS coordinate ping
+apiRouter.post('/delivery/orders/:id/location', async (req: Request, res: Response) => {
+  const order = store.orders.find((o) => o.id === req.params.id);
+  if (!order || !order.deliveryTracking) {
+    return res.status(404).json({ success: false, error: 'Order tracking not found' });
+  }
+
+  const { lat, lng, speedKmh, heading, currentLocationLabel } = req.body;
+  if (lat === undefined || lng === undefined) {
+    return res.status(400).json({ success: false, error: 'Latitude and longitude are required' });
+  }
+
+  const nowIso = new Date().toISOString();
+  order.deliveryTracking.partnerLocation = {
+    lat: Number(lat),
+    lng: Number(lng),
+    speedKmh: speedKmh ? Number(speedKmh) : undefined,
+    heading: heading ? Number(heading) : undefined,
+    updatedAt: nowIso,
+  };
+
+  if (currentLocationLabel) {
+    order.deliveryTracking.currentLocationLabel = currentLocationLabel;
+  }
+
+  res.json({
+    success: true,
+    data: order.deliveryTracking.partnerLocation,
+    partnerLocation: order.deliveryTracking.partnerLocation,
   });
 });
 

@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, LayoutGrid, X, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import type { Category } from '../types.js';
+import type { Category } from '../types';
 
 export interface CategoryPillsProps {
   categories: Category[];

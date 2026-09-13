@@ -8,7 +8,7 @@ import type {
   Customer,
   DeliveryPartner,
   DeliveryTrackingStage,
-} from '../types.js';
+} from '../types';
 
 const BASE_URL = '/api';
 
@@ -521,5 +521,82 @@ export const api = {
     const json: ApiResponse<any> = await res.json();
     if (!json.success || !json.data) throw new Error(json.error || 'Failed to sync with Supabase');
     return json.data;
+  },
+
+  // Delivery Partner Portal Dedicated Methods
+  async getDeliveryPartnerOrders(partnerId?: string): Promise<{
+    orders: Order[];
+    stats: {
+      total: number;
+      assigned: number;
+      completedToday: number;
+      availableToClaim: number;
+    };
+  }> {
+    const query = partnerId ? `?partnerId=${encodeURIComponent(partnerId)}` : '';
+    const res = await fetch(`${BASE_URL}/delivery/orders${query}`);
+    const json: ApiResponse<Order[]> & { stats?: any } = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to load delivery orders');
+    return {
+      orders: json.data,
+      stats: json.stats || {
+        total: json.data.length,
+        assigned: 0,
+        completedToday: 0,
+        availableToClaim: 0,
+      },
+    };
+  },
+
+  async claimDeliveryOrder(orderId: string, partner: DeliveryPartner): Promise<Order> {
+    const res = await fetch(`${BASE_URL}/delivery/orders/${orderId}/claim`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ partner }),
+    });
+    const json: ApiResponse<Order> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to claim delivery order');
+    return json.data;
+  },
+
+  async updateRiderDeliveryStage(
+    orderId: string,
+    payload: {
+      stage: DeliveryTrackingStage;
+      notes?: string;
+      currentLocationLabel?: string;
+      lat?: number;
+      lng?: number;
+      speedKmh?: number;
+    }
+  ): Promise<Order> {
+    const res = await fetch(`${BASE_URL}/delivery/orders/${orderId}/stage`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const json: ApiResponse<Order> = await res.json();
+    if (!json.success || !json.data) throw new Error(json.error || 'Failed to update delivery stage');
+    return json.data;
+  },
+
+  async pingRiderLocation(
+    orderId: string,
+    payload: {
+      lat: number;
+      lng: number;
+      speedKmh?: number;
+      heading?: number;
+      currentLocationLabel?: string;
+    }
+  ): Promise<{ lat: number; lng: number }> {
+    const res = await fetch(`${BASE_URL}/delivery/orders/${orderId}/location`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const json: ApiResponse<{ lat: number; lng: number }> & { partnerLocation?: { lat: number; lng: number } } = await res.json();
+    if (!json.success) throw new Error(json.error || 'Failed to send location ping');
+    return (json.data || json.partnerLocation) as { lat: number; lng: number };
   },
 };

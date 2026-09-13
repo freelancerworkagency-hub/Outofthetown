@@ -1,4 +1,4 @@
-import type { MenuItem, Category, Order, Reservation, PromoBanner, CafeInfo } from '../src/types.js';
+import type { MenuItem, Category, Order, Reservation, PromoBanner, CafeInfo } from '../src/types';
 
 export class CafeStore {
   private static instance: CafeStore;

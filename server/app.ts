@@ -1,8 +1,8 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
-import { apiRouter } from './routes.js';
-import { generalApiLimiter, secondRateLimiter } from './middleware/rateLimiter.js';
-import { sanitizeInputs } from './middleware/sanitize.js';
+import { apiRouter } from './routes';
+import { generalApiLimiter, secondRateLimiter } from './middleware/rateLimiter';
+import { sanitizeInputs } from './middleware/sanitize';
 
 /**
  * Express application instance configured for both:

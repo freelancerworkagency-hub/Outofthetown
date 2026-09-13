@@ -18,29 +18,31 @@ import {
   Star,
   Flame,
   Cake,
+  Bike,
 } from 'lucide-react';
-import { ThemeProvider } from './context/ThemeContext.js';
-import { AuthProvider } from './context/AuthContext.js';
-import { CartProvider, useCart } from './context/CartContext.js';
-import { Navbar } from './components/Navbar.js';
-import { TopPromotionalHero } from './components/TopPromotionalHero.js';
-import { FlipkartPromoBanner } from './components/FlipkartPromoBanner.js';
-import { CategoryPills } from './components/CategoryPills.js';
-import { FilterBar } from './components/FilterBar.js';
-import { MenuItemCard } from './components/MenuItemCard.js';
-import { OfferComboView } from './components/OfferComboView.js';
-import { CartDrawer } from './components/CartDrawer.js';
-import { CustomerAuthModal } from './components/CustomerAuthModal.js';
-import { ReservationModal } from './components/ReservationModal.js';
-import { CustomerProfileModal } from './components/CustomerProfileModal.js';
-import { OrderStatusModal } from './components/OrderStatusModal.js';
-import { CustomCakeModal } from './components/CustomCakeModal.js';
-import { AdminLoginModal } from './components/admin/AdminLoginModal.js';
-import { AdminDashboard } from './components/admin/AdminDashboard.js';
-import { LocationSection } from './components/LocationSection.js';
-import { MenuPdfDownloadSection } from './components/MenuPdfDownloadSection.js';
-import { api } from './services/api.js';
-import type { MenuItem, Category, PromoBanner, Order, CafeInfo } from './types.js';
+import { ThemeProvider } from './context/ThemeContext';
+import { AuthProvider } from './context/AuthContext';
+import { CartProvider, useCart } from './context/CartContext';
+import { Navbar } from './components/Navbar';
+import { TopPromotionalHero } from './components/TopPromotionalHero';
+import { FlipkartPromoBanner } from './components/FlipkartPromoBanner';
+import { CategoryPills } from './components/CategoryPills';
+import { FilterBar } from './components/FilterBar';
+import { MenuItemCard } from './components/MenuItemCard';
+import { OfferComboView } from './components/OfferComboView';
+import { CartDrawer } from './components/CartDrawer';
+import { CustomerAuthModal } from './components/CustomerAuthModal';
+import { ReservationModal } from './components/ReservationModal';
+import { CustomerProfileModal } from './components/CustomerProfileModal';
+import { OrderStatusModal } from './components/OrderStatusModal';
+import { CustomCakeModal } from './components/CustomCakeModal';
+import { AdminLoginModal } from './components/admin/AdminLoginModal';
+import { AdminDashboard } from './components/admin/AdminDashboard';
+import { DeliveryPartnerPortal } from './components/delivery/DeliveryPartnerPortal';
+import { LocationSection } from './components/LocationSection';
+import { MenuPdfDownloadSection } from './components/MenuPdfDownloadSection';
+import { api } from './services/api';
+import type { MenuItem, Category, PromoBanner, Order, CafeInfo } from './types';
 
 function CafeHome() {
   const { totalItemsCount, total, setIsCartOpen } = useCart();
@@ -81,6 +83,7 @@ function CafeHome() {
   const [isCustomerMenuOpen, setIsCustomerMenuOpen] = useState(false);
   const [isCustomCakeOpen, setIsCustomCakeOpen] = useState(false);
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+  const [isDeliveryPartnerOpen, setIsDeliveryPartnerOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [adminToken, setAdminToken] = useState<string | null>(() => {
     return sessionStorage.getItem('aura_cafe_admin_token');
@@ -722,6 +725,16 @@ function CafeHome() {
                   Restaurant Owner Admin
                 </button>
               </li>
+              <li>
+                <button
+                  id="footer-delivery-partner-portal-btn"
+                  onClick={() => setIsDeliveryPartnerOpen(true)}
+                  className="hover:text-amber-600 cursor-pointer flex items-center gap-1.5"
+                >
+                  <Bike className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Delivery Partner Portal</span>
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -775,6 +788,8 @@ function CafeHome() {
         onOpenReservation={() => setIsReservationOpen(true)}
         onOpenAdmin={handleOpenAdmin}
         onOpenCustomCake={() => setIsCustomCakeOpen(true)}
+        onOpenDeliveryPartner={() => setIsDeliveryPartnerOpen(true)}
+        onSelectOrder={(order) => setActiveOrder(order)}
       />
 
       {/* Made-to-Order Custom Cake & Celebration Bakery Modal */}
@@ -786,11 +801,19 @@ function CafeHome() {
         }}
       />
 
-      {/* Order Status Modal (Active Tracking) */}
+      {/* Order Status Modal (Active Tracking & Full Order Details) */}
       {activeOrder && (
         <OrderStatusModal
           order={activeOrder}
           onClose={() => setActiveOrder(null)}
+        />
+      )}
+
+      {/* Delivery Partner Portal (Rider Runs, Live GPS & NH-48 Route to Customer) */}
+      {isDeliveryPartnerOpen && (
+        <DeliveryPartnerPortal
+          onClose={() => setIsDeliveryPartnerOpen(false)}
+          onOpenOrderDetails={(order) => setActiveOrder(order)}
         />
       )}
 
