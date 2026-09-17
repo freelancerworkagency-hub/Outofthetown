@@ -11,11 +11,11 @@ import {
   MapPin,
   Cake,
 } from 'lucide-react';
-import { useCart } from '../context/CartContext.js';
-import { useAuth } from '../context/AuthContext.js';
-import { FilterBar, FilterBarProps } from './FilterBar.js';
-import type { Category } from '../types.js';
-import { CategoryPills } from './CategoryPills.js';
+import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { FilterBar, FilterBarProps } from './FilterBar';
+import type { Category } from '../types';
+import { CategoryPills } from './CategoryPills';
 
 export interface NavbarProps extends Omit<FilterBarProps, 'isSticky'> {
   searchQuery: string;

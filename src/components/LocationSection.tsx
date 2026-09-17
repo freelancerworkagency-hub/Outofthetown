@@ -9,7 +9,7 @@ import {
   Compass,
   CalendarCheck,
 } from 'lucide-react';
-import { OttLogo } from './OttLogo.js';
+import { OttLogo } from './OttLogo';
 
 interface LocationSectionProps {
   onOpenReservation?: () => void;

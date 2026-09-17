@@ -26,10 +26,10 @@ import {
   LogIn,
   Cake,
 } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext.js';
-import { useCart } from '../context/CartContext.js';
-import { useAuth } from '../context/AuthContext.js';
-import type { PromoBanner } from '../types.js';
+import { useTheme } from '../context/ThemeContext';
+import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import type { PromoBanner } from '../types';
 
 interface TopPromotionalHeroProps {
   searchQuery: string;

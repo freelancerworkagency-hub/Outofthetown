@@ -22,8 +22,8 @@ import {
   Tag,
   Search,
 } from 'lucide-react';
-import type { Category, MenuItem } from '../../types.js';
-import { api } from '../../services/api.js';
+import type { Category, MenuItem } from '../../types';
+import { api } from '../../services/api';
 
 interface CategoryManagementViewProps {
   categories: Category[];

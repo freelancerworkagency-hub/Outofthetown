@@ -20,7 +20,7 @@ import {
   Layers,
   ArrowUpRight,
 } from 'lucide-react';
-import type { Order, OrderStatus } from '../../types.js';
+import type { Order, OrderStatus } from '../../types';
 
 interface RevenueAnalysisProps {
   orders: Order[];

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Printer, X, Bell, CheckCircle2, Clock, MapPin, Phone } from 'lucide-react';
-import type { Order, CafeInfo } from '../../types.js';
+import type { Order, CafeInfo } from '../../types';
 
 interface KitchenOrderTicketProps {
   order: Order;

@@ -28,8 +28,8 @@ import {
   Layers,
   Image as ImageIcon,
 } from 'lucide-react';
-import type { Order, OrderStatus, CustomCakeDetails, CafeInfo } from '../../types.js';
-import { api } from '../../services/api.js';
+import type { Order, OrderStatus, CustomCakeDetails, CafeInfo } from '../../types';
+import { api } from '../../services/api';
 
 interface CustomCakesManagementProps {
   orders: Order[];

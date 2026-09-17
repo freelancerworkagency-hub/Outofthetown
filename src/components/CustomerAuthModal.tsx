@@ -12,7 +12,7 @@ import {
   RefreshCw,
   AlertCircle,
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext.js';
+import { useAuth } from '../context/AuthContext';
 
 export const CustomerAuthModal: React.FC = () => {
   const { isAuthModalOpen, closeAuthModal, authReason, sendOtp, verifyOtp, customer } = useAuth();

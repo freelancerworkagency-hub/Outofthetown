@@ -12,9 +12,9 @@ import {
   ShieldCheck,
   LogOut,
 } from 'lucide-react';
-import { api } from '../services/api.js';
-import { useAuth } from '../context/AuthContext.js';
-import type { Reservation, SeatingArea } from '../types.js';
+import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import type { Reservation, SeatingArea } from '../types';
 
 interface ReservationModalProps {
   isOpen: boolean;

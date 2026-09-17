@@ -14,8 +14,8 @@ import {
   AlertCircle,
   ChevronRight,
 } from 'lucide-react';
-import type { Order, DeliveryPartner, DeliveryTrackingStage, DeliveryPartnerVehicle } from '../../types.js';
-import { PRESET_DELIVERY_PARTNERS } from '../../utils/deliveryFleet.js';
+import type { Order, DeliveryPartner, DeliveryTrackingStage, DeliveryPartnerVehicle } from '../../types';
+import { PRESET_DELIVERY_PARTNERS } from '../../utils/deliveryFleet';
 
 interface AssignDeliveryPartnerModalProps {
   isOpen: boolean;

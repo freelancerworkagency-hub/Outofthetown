@@ -14,8 +14,8 @@ import {
   ShieldCheck,
   Flame,
 } from 'lucide-react';
-import type { PromoBanner, MenuItem } from '../types.js';
-import { useCart } from '../context/CartContext.js';
+import type { PromoBanner, MenuItem } from '../types';
+import { useCart } from '../context/CartContext';
 
 interface OfferComboViewProps {
   banner: PromoBanner;

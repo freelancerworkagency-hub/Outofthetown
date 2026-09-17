@@ -29,14 +29,14 @@ import {
   Database,
   Cake,
 } from 'lucide-react';
-import { api } from '../../services/api.js';
-import type { MenuItem, PromoBanner, Order, Reservation, CafeInfo, OrderStatus, Category } from '../../types.js';
-import { OrdersManagement } from './OrdersManagement.js';
-import { RevenueAnalysis } from './RevenueAnalysis.js';
-import { KitchenOrderTicket } from './KitchenOrderTicket.js';
-import { CategoryManagementView } from './CategoryManagementView.js';
-import { CustomCakesManagement } from './CustomCakesManagement.js';
-import { bellSound } from '../../utils/sound.js';
+import { api } from '../../services/api';
+import type { MenuItem, PromoBanner, Order, Reservation, CafeInfo, OrderStatus, Category } from '../../types';
+import { OrdersManagement } from './OrdersManagement';
+import { RevenueAnalysis } from './RevenueAnalysis';
+import { KitchenOrderTicket } from './KitchenOrderTicket';
+import { CategoryManagementView } from './CategoryManagementView';
+import { CustomCakesManagement } from './CustomCakesManagement';
+import { bellSound } from '../../utils/sound';
 
 interface AdminDashboardProps {
   token: string;

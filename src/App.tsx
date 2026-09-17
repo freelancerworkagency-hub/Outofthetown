@@ -36,6 +36,7 @@ import { ReservationModal } from './components/ReservationModal';
 import { CustomerProfileModal } from './components/CustomerProfileModal';
 import { OrderStatusModal } from './components/OrderStatusModal';
 import { CustomCakeModal } from './components/CustomCakeModal';
+import { ServiceCommandSection } from './components/ServiceCommandSection';
 import { AdminLoginModal } from './components/admin/AdminLoginModal';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { DeliveryPartnerPortal } from './components/delivery/DeliveryPartnerPortal';
@@ -82,6 +83,14 @@ function CafeHome() {
   const [isReservationOpen, setIsReservationOpen] = useState(false);
   const [isCustomerMenuOpen, setIsCustomerMenuOpen] = useState(false);
   const [isCustomCakeOpen, setIsCustomCakeOpen] = useState(false);
+  const [customCakeInitialImage, setCustomCakeInitialImage] = useState<string | undefined>(undefined);
+  const [customCakeInitialFlavor, setCustomCakeInitialFlavor] = useState<string | undefined>(undefined);
+
+  const handleOpenCustomCake = (initialImage?: string, initialFlavor?: string) => {
+    setCustomCakeInitialImage(initialImage);
+    setCustomCakeInitialFlavor(initialFlavor);
+    setIsCustomCakeOpen(true);
+  };
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [isDeliveryPartnerOpen, setIsDeliveryPartnerOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
@@ -445,42 +454,16 @@ function CafeHome() {
               </div>
             </div>
 
-            {/* Custom Cake / Made-to-Order Banner (Highlight when in Bakery or All) */}
+            {/* SELECT YOUR SERVICE & Twitch Commands Custom Cake Section (matching image.png & Twitch Panels Commands reference) */}
             {(activeCategory === 'bakery' || activeCategory === 'all') && (
-              <div
-                id="custom-cake-promo-banner"
-                className="mb-6 p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-rose-950 via-amber-950 to-stone-900 text-white shadow-xl relative overflow-hidden border border-rose-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group"
-              >
-                <div className="absolute -right-12 -top-12 w-44 h-44 bg-rose-500/15 rounded-full blur-3xl pointer-events-none" />
-                <div className="flex items-center gap-3.5 relative z-10">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-rose-500/30">
-                    <Cake className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-rose-500 text-white tracking-wide">
-                        Made-to-Order Bakery
-                      </span>
-                      <span className="text-xs text-rose-200">Celebration Cakes &amp; Bakery Pre-Orders</span>
-                    </div>
-                    <h3 className="text-base sm:text-lg font-serif font-bold text-white mt-0.5">
-                      Need a custom celebration cake with your own reference design?
-                    </h3>
-                    <p className="text-xs text-stone-300 max-w-xl">
-                      Upload your photo, select customized flavors, eggless options, weight, and celebration message. Our master pastry chef bakes it fresh for your event!
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  id="btn-open-custom-cake-flow"
-                  onClick={() => setIsCustomCakeOpen(true)}
-                  className="relative z-10 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 text-stone-950 font-bold text-xs sm:text-sm hover:from-amber-300 hover:to-rose-300 shadow-md shadow-rose-900/40 hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0"
-                >
-                  <Cake className="w-4 h-4" />
-                  <span>Design Custom Cake</span>
-                </button>
-              </div>
+              <ServiceCommandSection
+                onOpenCustomCake={handleOpenCustomCake}
+                onOpenReservation={() => setIsReservationOpen(true)}
+                onSelectFoodService={() => {
+                  const menuEl = document.getElementById('menu-heading');
+                  menuEl?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              />
             )}
 
             {/* Food Item Grids (Zomato-Inspired High Converting Layout) */}
@@ -795,7 +778,13 @@ function CafeHome() {
       {/* Made-to-Order Custom Cake & Celebration Bakery Modal */}
       <CustomCakeModal
         isOpen={isCustomCakeOpen}
-        onClose={() => setIsCustomCakeOpen(false)}
+        onClose={() => {
+          setIsCustomCakeOpen(false);
+          setCustomCakeInitialImage(undefined);
+          setCustomCakeInitialFlavor(undefined);
+        }}
+        initialReferenceImage={customCakeInitialImage}
+        initialFlavor={customCakeInitialFlavor}
         onOrderPlaced={(newOrder) => {
           setActiveOrder(newOrder);
         }}

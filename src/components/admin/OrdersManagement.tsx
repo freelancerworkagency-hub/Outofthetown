@@ -39,11 +39,11 @@ import type {
   CafeInfo,
   DeliveryPartner,
   DeliveryTrackingStage,
-} from '../../types.js';
-import { api } from '../../services/api.js';
-import { generateOrderInvoicePdf } from '../../utils/invoicePdf.js';
-import { STAGE_CONFIG } from '../../utils/deliveryFleet.js';
-import { AssignDeliveryPartnerModal } from './AssignDeliveryPartnerModal.js';
+} from '../../types';
+import { api } from '../../services/api';
+import { generateOrderInvoicePdf } from '../../utils/invoicePdf';
+import { STAGE_CONFIG } from '../../utils/deliveryFleet';
+import { AssignDeliveryPartnerModal } from './AssignDeliveryPartnerModal';
 
 interface OrdersManagementProps {
   orders: Order[];

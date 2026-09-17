@@ -1,7 +1,7 @@
 import React from 'react';
 import { Star, Plus, Minus, Clock, Flame } from 'lucide-react';
-import type { MenuItem } from '../types.js';
-import { useCart } from '../context/CartContext.js';
+import type { MenuItem } from '../types';
+import { useCart } from '../context/CartContext';
 
 interface MenuItemCardProps {
   item: MenuItem;

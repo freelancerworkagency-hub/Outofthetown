@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FileDown, Check, Loader2 } from 'lucide-react';
-import type { MenuItem, Category, CafeInfo } from '../types.js';
-import { generateMenuPdf } from '../utils/menuPdfGenerator.js';
+import type { MenuItem, Category, CafeInfo } from '../types';
+import { generateMenuPdf } from '../utils/menuPdfGenerator';
 
 interface MenuPdfDownloadSectionProps {
   menuItems: MenuItem[];

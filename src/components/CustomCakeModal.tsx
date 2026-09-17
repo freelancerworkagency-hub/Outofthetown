@@ -22,14 +22,17 @@ import {
   Camera,
   Trash2,
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext.js';
-import { api } from '../services/api.js';
-import type { Order, CustomCakeDetails } from '../types.js';
+import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
+import type { Order, CustomCakeDetails } from '../types';
 
 interface CustomCakeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onOrderSuccess: (order: Order) => void;
+  onOrderSuccess?: (order: Order) => void;
+  onOrderPlaced?: (order: Order) => void;
+  initialReferenceImage?: string;
+  initialFlavor?: string;
 }
 
 // Popular reference cake gallery images for quick inspiration
@@ -112,7 +115,14 @@ const TIME_SLOTS = [
   'Late Night Celebration (8:30 PM – 10:30 PM)',
 ];
 
-export const CustomCakeModal: React.FC<CustomCakeModalProps> = ({ isOpen, onClose, onOrderSuccess }) => {
+export const CustomCakeModal: React.FC<CustomCakeModalProps> = ({
+  isOpen,
+  onClose,
+  onOrderSuccess,
+  onOrderPlaced,
+  initialReferenceImage,
+  initialFlavor,
+}) => {
   const { customer, customerToken, isAuthenticated } = useAuth();
 
   // Helper to format default tomorrow date (YYYY-MM-DD)
@@ -124,13 +134,22 @@ export const CustomCakeModal: React.FC<CustomCakeModalProps> = ({ isOpen, onClos
 
   // Form State
   const [occasion, setOccasion] = useState<string>(OCCASIONS[0]);
-  const [flavor, setFlavor] = useState<string>(FLAVOR_OPTIONS[0].name);
+  const [flavor, setFlavor] = useState<string>(initialFlavor || FLAVOR_OPTIONS[0].name);
   const [weightKg, setWeightKg] = useState<number>(1.0);
   const [shape, setShape] = useState<string>(SHAPES[0]);
   const [isEggless, setIsEggless] = useState<boolean>(true);
   const [messageOnCake, setMessageOnCake] = useState<string>('');
   const [designDescription, setDesignDescription] = useState<string>('');
-  const [referenceImageUrl, setReferenceImageUrl] = useState<string>('');
+  const [referenceImageUrl, setReferenceImageUrl] = useState<string>(initialReferenceImage || '');
+
+  React.useEffect(() => {
+    if (initialReferenceImage) {
+      setReferenceImageUrl(initialReferenceImage);
+    }
+    if (initialFlavor) {
+      setFlavor(initialFlavor);
+    }
+  }, [initialReferenceImage, initialFlavor, isOpen]);
   const [targetDate, setTargetDate] = useState<string>(tomorrowStr);
   const [targetTime, setTargetTime] = useState<string>(TIME_SLOTS[2]);
   const [fulfillmentType, setFulfillmentType] = useState<'delivery' | 'pickup'>('delivery');
@@ -263,7 +282,8 @@ export const CustomCakeModal: React.FC<CustomCakeModalProps> = ({ isOpen, onClos
       };
 
       const createdOrder = await api.createOrder(payload, customerToken || undefined);
-      onOrderSuccess(createdOrder);
+      if (onOrderSuccess) onOrderSuccess(createdOrder);
+      if (onOrderPlaced) onOrderPlaced(createdOrder);
       onClose();
     } catch (err: any) {
       console.error('Failed to submit custom cake order:', err);

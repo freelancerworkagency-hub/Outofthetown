@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Sparkles, Tag, ArrowRight } from 'lucide-react';
-import type { PromoBanner } from '../types.js';
+import type { PromoBanner } from '../types';
 
 interface FlipkartPromoBannerProps {
   banners: PromoBanner[];

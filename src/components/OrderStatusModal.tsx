@@ -17,9 +17,9 @@ import {
   MapPin,
   MessageCircle,
 } from 'lucide-react';
-import { api } from '../services/api.js';
-import type { Order, OrderStatus } from '../types.js';
-import { DeliveryTrackingVisualizer } from './DeliveryTrackingVisualizer.js';
+import { api } from '../services/api';
+import type { Order, OrderStatus } from '../types';
+import { DeliveryTrackingVisualizer } from './DeliveryTrackingVisualizer';
 
 interface OrderStatusModalProps {
   order: Order;
